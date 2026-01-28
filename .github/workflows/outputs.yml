@@ -31,7 +31,7 @@ jobs:
         
         # Mostrar contenido actual (vacío al inicio)
         echo "Contenido de input:"
-        echo ${{ github.event.inputs }} 
+        echo ${{ toJSON(github.event.inputs) }} 
         echo "Contenido inicial:"
         cat "$GITHUB_OUTPUT" || echo "(archivo vacío)"
         
