@@ -25,6 +25,8 @@ jobs:
       run: |
         echo "Contenido de input:"
         echo '${{ toJSON(github.event.inputs) }}'
+        inputObject= ${{ toJSON(github.event.inputs) }}
+        echo inputObject.environment
     - name: Paso 1 - Crear output
       id: get_version  # 👈 ID CRÍTICO: nombre que usarás después
       run: |
