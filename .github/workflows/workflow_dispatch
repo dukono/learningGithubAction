@@ -1,0 +1,64 @@
+name: Debug outputs
+
+on: 
+  workflow_dispatch:  # Ejecución manual para testing
+    inputs:
+        environment:   # 👈 Nombre del input (tú lo defines)
+          description: "Entorno de despliegue"
+          required: true
+          type: choice
+          options:
+            - production
+            - staging
+            - development
+        
+        debug-mode:
+          description: "Habilitar modo debug"
+          required: false
+          default: false
+          type: boolean
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Debug inputs
+      run: |
+        echo "Contenido de input:"
+        echo '${{ toJSON(github.event.inputs) }}'
+        inputObject= ${{ toJSON(github.event.inputs) }}
+        echo inputObject.environment
+    - name: Paso 1 - Crear output
+      id: get_version  # 👈 ID CRÍTICO: nombre que usarás después
+      run: |
+        echo "=== DEBUG PASO 1 ==="
+        
+        # Mostrar dónde está el archivo GITHUB_OUTPUT
+        echo "Ruta de GITHUB_OUTPUT: $GITHUB_OUTPUT"
+        
+        # Mostrar contenido actual (vacío al inicio)
+        echo "Contenido inicial:"
+        cat "$GITHUB_OUTPUT" || echo "(archivo vacío)"
+        
+        # Escribir nuestro valor
+        echo "Escribiendo: version=1.2.3"
+        echo "version=1.2.3" >> "$GITHUB_OUTPUT"
+        
+        # Verificar que se escribió
+        echo "Contenido después de escribir:"
+        cat "$GITHUB_OUTPUT"
+      
+    - name: Paso 2 - Leer output
+      run: |
+        echo "=== DEBUG PASO 2 ==="
+        
+        # ✅ Forma CORRECTA: usar contexto steps
+        echo "Versión desde steps.get_version.outputs.version: ${{ steps.get_version.outputs.version }}"
+        
+        # ❌ Forma INCORRECTA: no existe como variable de entorno
+        echo "Versión desde $VERSION (no existe): $VERSION"
+    
+    - name: Paso 3 - Usar el valor en operaciones reales
+      run: |
+        VERSION="${{ steps.get_version.outputs.version }}"
+        echo "Deployando versión $VERSION a producción..."
+        # ./deploy.sh --version "$VERSION"
