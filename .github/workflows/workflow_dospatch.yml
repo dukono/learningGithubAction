@@ -25,8 +25,9 @@ jobs:
         run: |
           echo "Contenido de input:"
           echo '${{ toJSON(github.event.inputs) }}'
-          inputObject= ${{ toJSON(github.event.inputs) }}
-          echo inputObject.environment
+          $JSON='${{ toJSON(github.event.inputs) }}'
+          
+          echo $JSON  
   read_write_outputs:
     runs-on: ubuntu-latest
     steps:
