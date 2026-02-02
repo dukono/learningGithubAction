@@ -17,8 +17,7 @@ on:
           required: false
           default: false
           type: boolean
-jobs:
-  
+jobs:  
   read_inputs:
     runs-on: ubuntu-latest
     steps:
