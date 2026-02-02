@@ -18,6 +18,7 @@ on:
           default: false
           type: boolean
 jobs:
+  
   read_inputs:
     runs-on: ubuntu-latest
     steps:
