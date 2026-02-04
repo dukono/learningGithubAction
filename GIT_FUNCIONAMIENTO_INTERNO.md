@@ -1382,20 +1382,317 @@ Cada línea:
 
 **Uso del reflog:**
 
-```
-Escenario: Hiciste git reset --hard y "perdiste" commits
+El reflog es como una **máquina del tiempo personal** de Git. Registra cada movimiento de HEAD, incluso los que parecen "destructivos". 
 
+---
+
+### **Cómo Leer el Output del Reflog: Anatomía Línea por Línea**
+
+Veamos un reflog real y analicemos cada componente:
+
+```bash
 git reflog
-f1e2d3c HEAD@{0}: reset: moving to HEAD~2
-a1b2c3d HEAD@{1}: commit: Fix bug      ← Aquí está
-e5f6a7b HEAD@{2}: commit: Add feature
-
-Recuperar:
-git checkout HEAD@{1}  # Vuelve a donde estabas
-git branch recovered HEAD@{1}  # Guarda en rama
-
-El reflog guarda TODO por ~30 días
 ```
+
+**Output real:**
+```
+9674d15 (HEAD) HEAD@{0}: checkout: moving from bdcadc73ac16f26dbc766ace5c12a88748a5011b to HEAD@{12}
+bdcadc7 (origin/feature, feature) HEAD@{1}: checkout: moving from 63c00f9bc6c78fea829816c93147e061c1c663a5 to HEAD@{1}
+63c00f9 (origin/main, origin/HEAD, main) HEAD@{2}: checkout: moving from feature to HEAD@{3}
+bdcadc7 (origin/feature, feature) HEAD@{3}: commit: new file
+1118364 HEAD@{4}: commit: new file
+63c00f9 (origin/main, origin/HEAD, main) HEAD@{5}: checkout: moving from main to feature
+63c00f9 (origin/main, origin/HEAD, main) HEAD@{6}: commit: new
+462a524 HEAD@{7}: commit: new
+411d47c HEAD@{8}: commit: new
+2c89456 HEAD@{9}: commit: new
+9972a09 HEAD@{10}: commit: new
+0e5124c HEAD@{11}: commit: new
+7312698 HEAD@{12}: commit: new
+9674d15 (HEAD) HEAD@{13}: clone: from https://github.com/dukono/testsWithGitHubAction.git
+```
+
+---
+
+### **Desglose de una línea del reflog:**
+
+Tomemos una línea como ejemplo:
+```
+bdcadc7 (origin/feature, feature) HEAD@{3}: commit: new file
+```
+
+**Componentes:**
+
+```
+bdcadc7  HEAD@{3}  commit:  new file
+   │        │         │         │
+   │        │         │         └─── Mensaje descriptivo de la acción
+   │        │         └────────────── Tipo de acción (commit, checkout, reset, etc.)
+   │        └──────────────────────── Posición en el reflog (más bajo = más reciente)
+   └───────────────────────────────── SHA corto del commit (donde estaba HEAD)
+
+(origin/feature, feature)  ← Referencias que apuntan a este commit
+```
+
+---
+
+### **Tipos de acciones en el reflog:**
+
+El reflog registra diferentes tipos de operaciones:
+
+```bash
+# 1. CHECKOUT (cambiar de rama/commit)
+HEAD@{2}: checkout: moving from feature to HEAD@{3}
+             │       │             │         │
+             │       │             └─ Desde ─┘
+             │       └─ "moving from X to Y"
+             └─ Tipo de acción
+
+# 2. COMMIT (crear un commit)
+HEAD@{3}: commit: new file
+          │       │
+          │       └─ Mensaje del commit
+          └─ Acción
+
+# 3. CLONE (clonar repositorio)
+HEAD@{13}: clone: from https://github.com/dukono/testsWithGitHubAction.git
+           │      │
+           │      └─ URL del repo clonado
+           └─ Primera entrada (inicio del repo)
+
+# 4. RESET (mover HEAD hacia atrás)
+HEAD@{0}: reset: moving to HEAD~2
+          │      │
+          │      └─ A dónde se movió
+          └─ Acción peligrosa (puede "perder" commits)
+
+# 5. REBASE
+HEAD@{5}: rebase (start): checkout main
+HEAD@{4}: rebase (pick): Apply commit xyz
+HEAD@{3}: rebase (finish): returning to refs/heads/feature
+          │       │         │
+          │       │         └─ Fase del rebase
+          │       └─ Tipo de operación dentro del rebase
+          └─ Operación compleja con múltiples pasos
+
+# 6. MERGE
+HEAD@{2}: merge feature: Merge made by 'recursive' strategy
+          │     │        │
+          │     │        └─ Estrategia de merge usada
+          │     └─ Rama mergeada
+          └─ Acción
+
+# 7. PULL
+HEAD@{1}: pull: Fast-forward
+          │     │
+          │     └─ Tipo de merge (fast-forward o recursive)
+          └─ Acción (fetch + merge)
+
+# 8. CHERRY-PICK
+HEAD@{0}: cherry-pick: abc123f
+          │            │
+          │            └─ Commit cherry-pickeado
+          └─ Acción
+```
+
+---
+
+### **Interpretando las referencias (origin/feature, feature, HEAD)**
+
+```
+9674d15 (HEAD) HEAD@{0}: ...
+        └─────┘
+         HEAD apunta aquí AHORA
+
+bdcadc7 (origin/feature, feature) HEAD@{1}: ...
+        └────────────────────────┘
+         Dos referencias apuntan aquí:
+         - feature (rama local)
+         - origin/feature (rama remota)
+
+63c00f9 (origin/main, origin/HEAD, main) HEAD@{2}: ...
+        └────────────────────────────────┘
+         Tres referencias:
+         - main (rama local)
+         - origin/main (rama remota)
+         - origin/HEAD (rama default del remoto)
+```
+
+**¿Qué significa esto?**
+- Si ves `(HEAD)` → Ahí estás TÚ ahora
+- Si ves `(origin/X, X)` → Rama local y remota sincronizadas
+- Si solo ves `(X)` → Solo rama local (no pusheada o sin remoto)
+
+---
+
+### **Navegando el Reflog: De más reciente a más antiguo**
+
+```
+HEAD@{0}  ← Ahora (lo más reciente)
+HEAD@{1}  ← Hace 1 operación
+HEAD@{2}  ← Hace 2 operaciones
+HEAD@{3}  ← Hace 3 operaciones
+...
+HEAD@{13} ← Hace 13 operaciones (el inicio en este caso: clone)
+```
+
+**Regla:** Números más bajos = más reciente
+**Regla:** HEAD@{0} siempre es DONDE ESTÁS AHORA
+
+---
+
+### **Ejemplo Real Interpretado: Tu Reflog Completo**
+
+Vamos línea por línea con tu ejemplo:
+
+```bash
+# LÍNEA 1 (presente - HEAD@{0})
+9674d15 (HEAD) HEAD@{0}: checkout: moving from bdcadc73... to HEAD@{12}
+                         └─ Hiciste checkout a HEAD@{12}
+                         └─ Ahora HEAD está en 9674d15
+                         └─ Este commit es el mismo que HEAD@{12}
+
+# LÍNEA 2 (1 operación atrás - HEAD@{1})
+bdcadc7 (origin/feature, feature) HEAD@{1}: checkout: moving from 63c00f9bc... to HEAD@{1}
+                                             └─ Hiciste checkout a HEAD@{1} (recursivo)
+                                             └─ HEAD estaba en bdcadc7
+
+# LÍNEA 3 (2 operaciones atrás - HEAD@{2})
+63c00f9 (origin/main, origin/HEAD, main) HEAD@{2}: checkout: moving from feature to HEAD@{3}
+                                                    └─ Cambiaste de rama "feature" a HEAD@{3}
+                                                    └─ HEAD estaba en 63c00f9 (main)
+
+# LÍNEA 4 (3 operaciones atrás - HEAD@{3})
+bdcadc7 (origin/feature, feature) HEAD@{3}: commit: new file
+                                             └─ Hiciste un commit
+                                             └─ Mensaje: "new file"
+                                             └─ Estabas en rama "feature"
+
+# LÍNEA 5 (4 operaciones atrás - HEAD@{4})
+1118364 HEAD@{4}: commit: new file
+                  └─ Otro commit
+                  └─ No tiene referencias (commit intermedio)
+
+# LÍNEA 6 (5 operaciones atrás - HEAD@{5})
+63c00f9 (origin/main, origin/HEAD, main) HEAD@{5}: checkout: moving from main to feature
+                                                    └─ Cambiaste de main a feature
+                                                    └─ Estabas en main (63c00f9)
+
+# LÍNEAS 7-12 (6-11 operaciones atrás)
+63c00f9, 462a524, 411d47c, 2c89456, 9972a09, 0e5124c HEAD@{6-11}: commit: new
+└─ Serie de commits en main
+└─ Todos con mensaje "new"
+
+# LÍNEA 13 (12 operaciones atrás - HEAD@{12})
+7312698 HEAD@{12}: commit: new
+        └─ Commit en main
+
+# LÍNEA 14 (13 operaciones atrás - inicio - HEAD@{13})
+9674d15 (HEAD) HEAD@{13}: clone: from https://github.com/dukono/testsWithGitHubAction.git
+               └─ Primera acción: clonar el repo
+               └─ Inicio de tu reflog
+```
+
+---
+
+### **Reconstruyendo la Historia Desde el Reflog**
+
+Basado en tu reflog, esto es lo que hiciste:
+
+```
+1. Clonaste el repo (HEAD@{13})
+   └─ HEAD en 9674d15
+
+2. Hiciste 6 commits en main (HEAD@{12} a HEAD@{6})
+   └─ Todos con mensaje "new"
+   └─ Último commit: 63c00f9
+
+3. Cambiaste a rama "feature" (HEAD@{5})
+   └─ git checkout feature
+
+4. Hiciste 2 commits en "feature" (HEAD@{4} y HEAD@{3})
+   └─ 1118364 y bdcadc7
+
+5. Hiciste checkouts recursivos navegando el reflog:
+   └─ checkout from feature to HEAD@{3} (HEAD@{2})
+   └─ checkout to HEAD@{1} (HEAD@{1})
+   └─ checkout to HEAD@{12} (HEAD@{0})  ← Volviste al commit 7312698
+```
+
+**Resultado final:**
+- HEAD está en 9674d15 (el commit inicial después del clone)
+- Rama "feature" sigue en bdcadc7
+- Rama "main" sigue en 63c00f9
+
+---
+
+### **Caso Práctico: Recuperar Trabajo "Perdido"**
+
+Imagina que después de hacer `checkout to HEAD@{12}`, te das cuenta que querías estar en "feature":
+
+```bash
+# Ver dónde está feature
+git reflog | grep "feature"
+bdcadc7 (origin/feature, feature) HEAD@{1}: ...
+bdcadc7 (origin/feature, feature) HEAD@{3}: commit: new file
+
+# feature está en bdcadc7, que es HEAD@{3}
+
+# Recuperar:
+git checkout feature
+# O directamente:
+git checkout HEAD@{3}
+
+# O crear rama de respaldo:
+git branch feature-backup HEAD@{3}
+```
+
+---
+
+### **Comandos Útiles para Explorar el Reflog**
+
+```bash
+# Ver reflog completo
+git reflog
+
+# Ver reflog con fechas (más legible)
+git reflog --date=relative
+# Output: HEAD@{5 minutes ago}, HEAD@{2 hours ago}, etc.
+
+# Ver reflog con timestamps exactos
+git reflog --date=iso
+# Output: HEAD@{2026-02-03 10:30:45 +0100}
+
+# Ver reflog de una rama específica
+git reflog show feature
+git reflog show main
+
+# Ver qué había en un punto específico
+git show HEAD@{5}
+git log HEAD@{5} --oneline -5
+
+# Comparar dos puntos del reflog
+git diff HEAD@{5}..HEAD@{2}
+
+# Ver archivos en un punto del reflog
+git ls-tree HEAD@{3}
+```
+
+---
+
+### **Resumen: Qué Significa Cada Parte**
+
+```
+SHA  (refs)  HEAD@{n}:  tipo:  descripción
+ │      │        │        │         │
+ │      │        │        │         └─ Qué pasó
+ │      │        │        └─────────── Tipo de acción
+ │      │        └──────────────────── Posición (0=ahora, más=pasado)
+ │      └───────────────────────────── Referencias que apuntan aquí
+ └──────────────────────────────────── Dónde estaba HEAD
+```
+
+El reflog es tu **historia personal** en Git. Cada línea es un paso que diste. Con esta información puedes volver a cualquier punto del pasado, recuperar trabajo "perdido", y entender exactamente qué operaciones hiciste.
 
 ---
 
@@ -2008,6 +2305,7 @@ Sin reutilización sería: 100 + 101 + 102 = 303 KB
 ---
 
 ## 9. Operaciones Fundamentales
+[↑ Top](#-tabla-de-contenidos)
 
 ### Introducción: Comandos como Manipulación de Objetos
 
@@ -2351,6 +2649,7 @@ Resultado:
 ---
 
 ## 10. Git y GitHub Actions
+[↑ Top](#-tabla-de-contenidos)
 
 ### Introducción: Git en Entornos de CI/CD
 
