@@ -22,28 +22,7 @@
 9. [Operaciones Fundamentales](#9-operaciones-fundamentales)
    - 9.1 [Comandos Plumbing vs Porcelana](#91-comandos-plumbing-vs-porcelana)
    - 9.2 [Comandos Plumbing (Internos)](#92-comandos-plumbing-internos)
-   - 9.3 [Cómo Funcionan Comandos Comunes](#93-cómo-funcionan-comandos-comunes)
-     - 9.3.1 [git add - Preparando Cambios](#931-git-add---preparando-cambios)
-     - 9.3.2 [git commit - Guardando la Historia](#932-git-commit---guardando-la-historia)
-     - 9.3.3 [git branch - Gestionando Líneas de Desarrollo](#933-git-branch---gestionando-líneas-de-desarrollo)
-     - 9.3.4 [git checkout / git switch - Navegando el Código](#934-git-checkout--git-switch---navegando-el-código)
-     - 9.3.5 [git merge - Integrando Cambios](#935-git-merge---integrando-cambios)
-     - 9.3.6 [git rebase - Reescribiendo Historia](#936-git-rebase---reescribiendo-historia)
-     - 9.3.7 [git reset - Moviendo Referencias](#937-git-reset---moviendo-referencias)
-     - 9.3.8 [git stash - Guardado Temporal](#938-git-stash---guardado-temporal)
-     - 9.3.9 [git log - Explorando la Historia](#939-git-log---explorando-la-historia)
-     - 9.3.10 [git status - Inspeccionando el Estado](#9310-git-status---inspeccionando-el-estado)
-     - 9.3.11 [git diff - Comparando Cambios](#9311-git-diff---comparando-cambios)
-     - 9.3.12 [git clone - Copiando Repositorios](#9312-git-clone---copiando-repositorios)
-     - 9.3.13 [git remote - Gestionando Repositorios Remotos](#9313-git-remote---gestionando-repositorios-remotos)
-     - 9.3.14 [git fetch - Descargando Cambios](#9314-git-fetch---descargando-cambios)
-     - 9.3.15 [git pull - Descargando e Integrando](#9315-git-pull---descargando-e-integrando)
-     - 9.3.16 [git push - Subiendo Cambios](#9316-git-push---subiendo-cambios)
-     - 9.3.17 [git tag - Marcando Versiones](#9317-git-tag---marcando-versiones)
-     - 9.3.18 [git revert - Deshaciendo Commits Públicos](#9318-git-revert---deshaciendo-commits-públicos)
-     - 9.3.19 [git cherry-pick - Aplicando Commits Selectivos](#9319-git-cherry-pick---aplicando-commits-selectivos)
-     - 9.3.20 [git clean - Limpiando Archivos No Rastreados](#9320-git-clean---limpiando-archivos-no-rastreados)
-     - 9.3.21 [git rm y git mv - Eliminando y Moviendo Archivos](#9321-git-rm-y-git-mv---eliminando-y-moviendo-archivos)
+   - 9.3 [Cómo Funcionan Comandos Comunes](#93-cómo-funcionan-comandos-comunes) → **Ver `GIT_COMANDOS_GUIA_PRACTICA.md`**
 
 ### PARTE IV: INTEGRACIÓN
 10. [Git y GitHub Actions](#10-git-y-github-actions)
@@ -2601,18 +2580,140 @@ Internamente: Lee tree object, lista entradas
 
 ### 9.3 Cómo Funcionan Comandos Comunes
 
-Ahora veremos cada comando Porcelain en profundidad: cómo funciona internamente, su uso práctico, opciones importantes y casos de uso reales.
+> **📘 Para uso práctico completo de comandos:** Ver `GIT_COMANDOS_GUIA_PRACTICA.md`  
+> Este documento contiene la guía completa de 21 comandos Git con ejemplos del mundo real, opciones avanzadas, casos de uso y mejores prácticas.
+
+Esta sección se enfoca en entender **cómo los comandos Porcelain descomponen en comandos Plumbing** internamente, revelando qué hace Git bajo el capó.
 
 ---
 
-#### 9.3.1 git add - Preparando Cambios
+**La relación Plumbing → Porcelain:**
 
-**Funcionamiento interno:**
+Los comandos "porcelana" (interfaz amigable) internamente ejecutan múltiples comandos "plomería" (operaciones de bajo nivel):
 
+**Ejemplo 1: `git add file.txt`**
+
+```bash
+# Usuario ejecuta:
+git add file.txt
+
+# Git internamente ejecuta:
+git hash-object -w file.txt   # Crea blob, retorna hash
+git update-index --add file.txt # Actualiza index con hash
 ```
-Internamente hace:
-1. git hash-object -w file.txt
-   → Calcula SHA-1 del contenido
+
+**Ejemplo 2: `git commit -m "mensaje"`**
+
+```bash
+# Usuario ejecuta:
+git commit -m "Add feature"
+
+# Git internamente ejecuta:
+git write-tree                 # Crea tree object, retorna hash
+git commit-tree <tree> -p <parent> -m "Add feature"  # Crea commit object
+git update-ref refs/heads/main <commit-hash>  # Actualiza rama
+```
+
+**Ejemplo 3: `git branch nueva-rama`**
+
+```bash
+# Usuario ejecuta:
+git branch feature-x
+
+# Git internamente ejecuta:
+git rev-parse HEAD              # Obtiene hash del commit actual
+git update-ref refs/heads/feature-x <hash>  # Crea archivo con hash
+# → Solo 41 bytes, instantáneo
+```
+
+**Ejemplo 4: `git checkout main`**
+
+```bash
+# Usuario ejecuta:
+git checkout main
+
+# Git internamente ejecuta:
+git rev-parse refs/heads/main   # Obtiene hash de main
+git read-tree <hash>            # Lee tree del commit
+# Actualiza working directory
+git symbolic-ref HEAD refs/heads/main  # Actualiza HEAD
+# Actualiza .git/index
+```
+
+---
+
+**Resumen de comandos Porcelain y su descomposición:**
+
+| Comando Porcelain | Comandos Plumbing Internos | Efecto |
+|-------------------|---------------------------|---------|
+| `git add` | `hash-object` + `update-index` | Crea blob, actualiza index |
+| `git commit` | `write-tree` + `commit-tree` + `update-ref` | Crea tree, commit, mueve rama |
+| `git branch` | `rev-parse` + `update-ref` | Crea referencia (41 bytes) |
+| `git checkout` | `rev-parse` + `read-tree` + `symbolic-ref` | Mueve HEAD, actualiza working |
+| `git merge` | `merge-base` + `read-tree` + `write-tree` + `commit-tree` | Three-way merge o ff |
+| `git reset` | `update-ref` + (opcional) `read-tree` | Mueve rama, actualiza staging/working |
+| `git tag` | `update-ref refs/tags/*` | Crea referencia inmutable |
+
+---
+
+**Por qué esta comprensión importa:**
+
+Entender la descomposición interna te permite:
+
+1. **Diagnosticar problemas**: Sabes qué falló exactamente
+2. **Usar Git con confianza**: Entiendes las consecuencias
+3. **Optimizar workflows**: Sabes qué es costoso y qué es barato
+4. **Recuperar de errores**: Conoces los mecanismos subyacentes
+5. **Crear automatizaciones**: Puedes usar comandos plumbing directamente
+
+**Ejemplos de poder con comandos Plumbing:**
+
+```bash
+# Crear commit manualmente (sin staging):
+tree=$(git write-tree)
+parent=$(git rev-parse HEAD)
+commit=$(git commit-tree $tree -p $parent -m "Direct commit")
+git update-ref refs/heads/main $commit
+
+# Ver objeto exactamente como Git lo ve:
+git cat-file -p HEAD
+
+# Listar todos los objetos del repo:
+git rev-list --objects --all
+
+# Ver tamaño de objetos:
+git count-objects -v
+
+# Verificar integridad completa:
+git fsck --full
+```
+
+---
+
+**Para uso práctico diario:**
+
+Consulta `GIT_COMANDOS_GUIA_PRACTICA.md` donde encontrarás:
+
+- ✅ **21 comandos Git** cubiertos completamente
+- ✅ **15-20+ opciones** por comando con ejemplos
+- ✅ **10+ casos de uso reales** por comando
+- ✅ **Troubleshooting completo** con soluciones
+- ✅ **Mejores prácticas** (qué hacer y qué evitar)
+- ✅ **Workflows comunes** (Feature Branch, Fork, Hotfix)
+- ✅ **Configuración recomendada** para productividad
+
+La separación de documentos mantiene este archivo enfocado en **teoría y arquitectura interna**, mientras que el documento de comandos se enfoca en **práctica y uso real**.
+
+---
+
+## 10. Git y GitHub Actions
+[↑ Top](#-tabla-de-contenidos)
+
+### Introducción: Git en Entornos de CI/CD
+
+Ahora que entiendes cómo funciona Git internamente, es momento de ver cómo se aplica este conocimiento en **GitHub Actions** y otros sistemas de CI/CD.
+
+**¿Por qué es importante entender Git para GitHub Actions?**
    → Comprime con zlib
    → Guarda blob en .git/objects/
 
