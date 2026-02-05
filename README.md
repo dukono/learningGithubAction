@@ -9,13 +9,13 @@ Este repositorio es una **guía completa y práctica** que cubre:
 ### 🎯 Ruta de Aprendizaje Recomendada
 
 ```
-1️⃣ FUNDAMENTOS GIT
+
    ↓
 2️⃣ GITHUB ACTIONS - ARQUITECTURA
    ↓
 3️⃣ GITHUB ACTIONS - CONCEPTOS
    ↓
-4️⃣ EJEMPLOS PRÁCTICOS
+
 ```
 
 ---
@@ -27,17 +27,6 @@ Este repositorio es una **guía completa y práctica** que cubre:
 **¿Por qué leer esto primero?**
 GitHub Actions trabaja directamente con Git (commits, branches, tags, refs). Entender Git te permite usar GitHub Actions con confianza y crear workflows avanzados.
 
-**Contenido:**
-- ✅ **Filosofía de Git**: Por qué Git funciona como funciona
-- ✅ **Sistema de Objetos**: Blobs, trees, commits, tags
-- ✅ **Base de Datos de Contenido**: Content-addressable storage
-- ✅ **El Grafo de Commits**: Historia como DAG
-- ✅ **Sistema de Referencias**: Branches, tags, HEAD
-- ✅ **Las Tres Áreas**: Working, staging, repository
-- ✅ **Almacenamiento del Historial**: Cómo Git guarda la historia
-- ✅ **Operaciones Fundamentales**: Qué hacen los comandos internamente
-- ✅ **Git en GitHub Actions**: Integración con CI/CD
-
 **Nivel**: Fundamentos técnicos explicados en profundidad
 **Tiempo**: 2-3 horas de lectura
 **Prerequisitos**: Ninguno (explica desde cero)
@@ -48,12 +37,8 @@ GitHub Actions trabaja directamente con Git (commits, branches, tags, refs). Ent
 
 ### 1. **[GITHUB_ACTIONS_ARQUITECTURA_TECNICA.md](./GITHUB_ACTIONS_ARQUITECTURA_TECNICA.md)** ⭐ **LECTURA ESENCIAL**
 
-**Contenido:**
-- 📐 Arquitectura técnica completa de GitHub Actions
-- 🔧 Cómo funciona internamente (runners, orchestration, execution)
-- 🎯 Conceptos fundamentales explicados en profundidad
-- 💡 Libro técnico completo sobre GitHub Actions
-- 🔗 Integración con Git (eventos, contextos, referencias)
+bababab
+cambio
 
 **Nivel**: Arquitectura y funcionamiento interno
 **Tiempo**: 2-3 horas de lectura
@@ -62,10 +47,7 @@ GitHub Actions trabaja directamente con Git (commits, branches, tags, refs). Ent
 ### 2. **[GITHUB_ACTIONS_CONTEXTOS.md](./GITHUB_ACTIONS_CONTEXTOS.md)**
 
 **Contenido:**
-- Todos los contextos disponibles (`github`, `env`, `secrets`, `job`, `steps`, etc.)
-- Cuándo y cómo usar cada contexto
-- Ejemplos prácticos de cada uno
-- Relación con conceptos Git (github.sha, github.ref, etc.)
+remove
 
 **Nivel**: Referencia técnica
 **Tiempo**: 1 hora de consulta
