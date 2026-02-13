@@ -7,6 +7,7 @@
 <a id="tabla-de-contenidos"></a>
 ## 📚 Tabla de Contenidos
 
+
 ### COMANDOS BÁSICOS ESENCIALES
 1. [git add - Preparando Cambios](#1-git-add---preparando-cambios)
 2. [git commit - Guardando la Historia](#2-git-commit---guardando-la-historia)
