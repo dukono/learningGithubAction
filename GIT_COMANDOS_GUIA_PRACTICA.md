@@ -91,7 +91,7 @@ Resultado:
 - Repository NO cambia (aún no hay commit)
 ```
 
-**Uso práctico y opciones:**
+**Uso práctico y opciones:** [🔙](#1-git-add---preparando-cambios)
 
 ```bash
 # 1. Añadir archivo específico
@@ -130,7 +130,7 @@ git add -p archivo.txt
 # → Puedes stagear solo PARTE de un archivo
 ```
 
-**Caso de uso real: Commits atómicos con -p**
+**Caso de uso real: Commits atómicos con -p** [🔙](#1-git-add---preparando-cambios)
 
 ```bash
 Escenario: Modificaste un archivo con 2 features diferentes
@@ -157,7 +157,7 @@ git commit -m "fix: Fix validation bug"
 Resultado: 2 commits atómicos, historia más clara
 ```
 
-**Opciones avanzadas de add -p:**
+**Opciones avanzadas de add -p:** [🔙](#1-git-add---preparando-cambios)
 
 ```
 Durante git add -p, opciones disponibles:
@@ -182,7 +182,7 @@ Opción 'e' (edit) es para EXPERTOS:
 → Útil cuando 's' no divide suficiente
 ```
 
-**Patrones de uso comunes:**
+**Patrones de uso comunes:** [🔙](#1-git-add---preparando-cambios)
 
 ```bash
 # Patrón 1: Añadir por tipo de archivo
@@ -1764,7 +1764,7 @@ Cambiar entre ramas:
 
 ```bash
 # ============================================
-# CREAR RAMAS
+# CREAR RAMAS CON GIT BRANCH
 # ============================================
 
 # 1. Crear rama sin cambiar a ella
@@ -1777,37 +1777,23 @@ git branch feature-x abc123
 git branch hotfix v1.2.3
 # → Crea rama apuntando al commit especificado
 
-# 3. Crear y cambiar a rama (método clásico)
-git checkout -b feature-x
-# → Crea rama Y cambia a ella
-# → Equivalente a: git branch feature-x && git checkout feature-x
-
-# 4. Crear y cambiar a rama (método moderno)
-git switch -c feature-x
-# → Igual que checkout -b pero más claro
-# → Comando específico para ramas (Git 2.23+)
-
-# 5. Crear rama desde otra rama (no desde HEAD)
+# 3. Crear rama desde otra rama (no desde HEAD)
 git branch feature-y feature-x
 # → Crea feature-y apuntando donde está feature-x
 
-# 6. Crear rama desde remota
+# 4. Crear rama desde remota
 git branch feature-x origin/feature-x
-git checkout -b feature-x origin/feature-x
 # → Crea rama local basada en remota
+# → Solo crea, NO cambia a ella
+# → NO configura tracking automáticamente
 
-# 7. Crear rama con tracking automático
-git checkout -b feature-x --track origin/feature-x
-git switch -c feature-x --track origin/feature-x
-# → Configura upstream automáticamente
-# → git push/pull sin argumentos funcionarán
+# 5. Copiar rama (crear con mismo contenido)
+git branch nueva-copia rama-existente
+# → nueva-copia apunta al mismo commit que rama-existente
 
-# 8. Crear rama "huérfana" (sin historia)
-git checkout --orphan nueva-rama
-# → Crea rama sin commits previos
-# → Útil para gh-pages, documentación separada
-# → Working directory mantiene archivos (debes limpiar)
-git rm -rf .  # Limpiar si quieres empezar vacío
+# Nota: Para crear Y cambiar de rama, ver:
+# - Sección "git switch" para método moderno
+# - Sección "git checkout" para método clásico
 ```
 
 **Uso práctico - Listar y ver ramas:**
@@ -2537,7 +2523,14 @@ git status | head -1
 [⬆️ Top](#tabla-de-contenidos)
 
 **¿Qué hace?**
-Cambia de rama, navega por commits históricos, o restaura archivos del working directory. Es uno de los comandos más versátiles (y confusos) de Git, por eso se dividió en `git switch` y `git restore` en versiones modernas.
+Cambia de rama, navega por commits históricos, o restaura archivos del working directory. Es uno de los comandos más versátiles (y confusos) de Git, por eso se dividió en `git switch` (ramas) y `git restore` (archivos) en versiones modernas.
+
+> **📝 NOTA IMPORTANTE:** Esta sección cubre **tres comandos diferentes**:
+> - **git switch** (moderno) - Para cambiar de rama
+> - **git restore** (moderno) - Para restaurar archivos
+> - **git checkout** (legacy) - Hace ambas cosas (confuso)
+>
+> **Recomendación:** Usa `git switch` para ramas y `git restore` para archivos.
 
 **Funcionamiento interno:**
 ```
@@ -2564,7 +2557,120 @@ Al checkout de commit (detached HEAD):
 4. Commits nuevos quedan "huérfanos" al cambiar
 ```
 
-**git checkout vs git switch vs git restore:**
+---
+
+### 7.1. git switch - Cambiar de Rama (Moderno, Recomendado)
+
+**Uso práctico - Cambiar entre ramas:**
+
+```bash
+# 1. Cambiar a rama existente
+git switch main
+git switch feature-x
+
+# 2. Crear rama nueva y cambiar a ella
+git switch -c nueva-rama
+# → Equivalente a: git branch nueva-rama && git switch nueva-rama
+
+# 3. Crear rama desde commit específico
+git switch -c hotfix abc123
+git switch -c bugfix HEAD~3
+
+# 4. Volver a rama anterior
+git switch -
+# → Alterna entre dos ramas rápidamente
+# → Como "cd -" en bash
+
+# 5. Crear y cambiar con tracking automático
+git switch -c feature-x --track origin/feature-x
+# → Configura upstream automáticamente
+
+# 6. Forzar cambio (descarta cambios locales)
+git switch -f otra-rama
+# → ⚠️ Pierdes cambios no commiteados
+
+# 7. Cambiar con merge de cambios locales
+git switch -m otra-rama
+# → Intenta mergear cambios locales a nueva rama
+
+# 8. Cambiar a rama remota (crea local tracking)
+git switch feature-x
+# → Si no existe local pero sí origin/feature-x
+# → Crea local automáticamente con tracking
+```
+
+**Uso práctico - Detached HEAD con switch:**
+
+```bash
+# Entrar en Detached HEAD
+git switch --detach abc123
+git switch --detach HEAD~3
+git switch --detach v1.0.0
+
+# → HEAD apunta directamente a commit (no a rama)
+# → Útil para inspección, no para desarrollo
+```
+
+---
+
+### 7.2. git restore - Restaurar Archivos (Moderno, Recomendado)
+
+**Uso práctico - Descartar cambios:**
+
+```bash
+# 1. Descartar cambios en working directory
+git restore file.txt
+# → Restaura desde staging (o HEAD si no está staged)
+
+# 2. Descartar todos los cambios
+git restore .
+# → Restaura todos los archivos modificados
+
+# 3. Unstage archivo (quitar de staging)
+git restore --staged file.txt
+# → Mueve de staging a working directory
+# → Equivalente a: git reset HEAD file.txt
+
+# 4. Unstage y descartar cambios
+git restore --staged --worktree file.txt
+# → Quita de staging Y descarta cambios
+
+# 5. Restaurar desde commit específico
+git restore --source=abc123 file.txt
+git restore --source=HEAD~3 file.txt
+git restore --source=main file.txt
+
+# 6. Restaurar archivo borrado
+git restore deleted-file.txt
+# → Solo si estaba tracked antes
+
+# 7. Restaurar con patrón
+git restore '*.js'
+git restore 'src/**/*.txt'
+
+# 8. Restaurar directorio completo
+git restore src/
+```
+
+**Uso práctico - Casos especiales:**
+
+```bash
+# Restaurar archivo de otra rama sin cambiar de rama
+git restore --source=feature-x -- config.json
+
+# Restaurar múltiples archivos de commit antiguo
+git restore --source=HEAD~5 -- file1.txt file2.txt
+
+# Ver qué se restauraría sin hacerlo (no existe, usa diff)
+git diff file.txt  # Ver cambios antes de restaurar
+git restore file.txt
+```
+
+---
+
+### 7.3. git checkout - Comando Legacy (Multiuso)
+
+**Comparación de sintaxis:**
 
 ```bash
 # ============================================
@@ -2577,129 +2683,45 @@ git checkout -- file.txt        # Descartar cambios de archivo
 git checkout abc123 file.txt    # Restaurar archivo desde commit
 git checkout tags/v1.0.0        # Checkout de tag
 
-# Problema: ¿checkout cambia rama o restaura archivo?
+# PROBLEMA: ¿checkout cambia rama o restaura archivo?
 # → Sintaxis ambigua, fácil confundirse
+# → Por eso se crearon switch y restore
 
 # ============================================
-# SWITCH (Solo ramas, Git 2.23+ - RECOMENDADO)
+# EQUIVALENCIAS: checkout → switch/restore
 # ============================================
-git switch main                 # Cambiar rama
-git switch -c nueva             # Crear y cambiar
-git switch -                    # Volver a rama anterior
-git switch --detach abc123      # Detached HEAD explícito
 
-# Ventaja: Propósito claro, menos errores
+# Cambiar de rama:
+git checkout main          →  git switch main
+git checkout -b nueva      →  git switch -c nueva
+git checkout -            →  git switch -
 
-# ============================================
-# RESTORE (Solo archivos, Git 2.23+ - RECOMENDADO)
-# ============================================
-git restore file.txt                     # Descartar cambios (desde index)
-git restore --staged file.txt            # Unstage archivo
-git restore --source=abc123 file.txt     # Restaurar desde commit
-git restore --source=HEAD~3 file.txt     # Restaurar desde ancestro
+# Descartar cambios:
+git checkout -- file.txt   →  git restore file.txt
+git checkout -- .          →  git restore .
 
-# Ventaja: Semántica clara, sin confusión con ramas
+# Restaurar desde commit:
+git checkout abc123 file.txt  →  git restore --source=abc123 file.txt
 
-# ============================================
-# RECOMENDACIÓN MODERNA
-# ============================================
-✓ git switch → Para cambiar de rama
-✓ git restore → Para restaurar archivos
-✗ git checkout → Solo si usas Git < 2.23 o scripts legacy
+# Ir a commit:
+git checkout abc123        →  git switch --detach abc123
+
+# Restaurar desde otra rama:
+git checkout main file.txt →  git restore --source=main file.txt
 ```
 
-**Uso práctico - git switch (ramas):**
+**Uso de checkout (si usas Git < 2.23):**
 
 ```bash
-# ============================================
-# CAMBIAR ENTRE RAMAS
-# ============================================
+# Cambiar de rama
+git checkout main
+git checkout feature-x
 
-# 1. Cambiar a rama existente
-git switch main
-git switch feature-x
+# Crear y cambiar
+git checkout -b nueva-rama
+git checkout -b hotfix abc123
 
-# 2. Crear rama nueva y cambiar a ella
-git switch -c nueva-rama
-
-# 3. Crear rama desde commit específico
-git switch -c hotfix abc123
-git switch -c bugfix HEAD~3
-
-# 4. Volver a rama anterior
-git switch -
-# → Alterna entre dos ramas rápidamente
-
-# 5. Cambiar con tracking automático
-git switch --track origin/feature-x
-
-# 6. Forzar cambio (descarta cambios locales)
-git switch -f otra-rama
-
-# 7. Cambiar con merge de cambios locales
-git switch -m otra-rama
-```
-
-**Detached HEAD:**
-
-```bash
-# ¿Qué es Detached HEAD?
-# → HEAD apunta directamente a commit (no a rama)
-# → Commits nuevos quedan "huérfanos"
-# → Útil para inspección, no para desarrollo
-
-# Entrar en Detached HEAD:
-git checkout abc123
-git switch --detach abc123
-git checkout v1.0.0
-
-# ¿Por qué usarlo?
-✓ Inspeccionar código antiguo
-✓ Probar build de versión específica
-✓ Reproducir bug histórico
-✓ Auditar cambios
-✗ NO para desarrollo (commits se pierden)
-
-# Salir de Detached HEAD:
-git switch main              # Vuelve a rama
-git switch -c nueva-rama     # Convierte trabajo en rama
-
-# Ver si estás en Detached HEAD:
-git branch
-# * (HEAD detached at abc123)
-```
-
-**Uso práctico - git restore (archivos):**
-
-```bash
-# 1. Descartar cambios en working directory
-git restore file.txt
-
-# 2. Descartar todos los cambios
-git restore .
-
-# 3. Unstage archivo (quitar de staging)
-git restore --staged file.txt
-
-# 4. Unstage y descartar cambios
-git restore --staged --worktree file.txt
-
-# 5. Restaurar desde commit específico
-git restore --source=abc123 file.txt
-git restore --source=HEAD~3 file.txt
-
-# 6. Restaurar archivo borrado
-git restore deleted-file.txt
-
-# 7. Restaurar con patrón
-git restore '*.js'
-git restore 'src/**/*.txt'
-```
-
-**Uso práctico - git checkout (legacy):**
-
-```bash
-# Descartar cambios
+# Descartar cambios (IMPORTANTE: usa --)
 git checkout -- file.txt
 git checkout -- .
 
@@ -2707,89 +2729,231 @@ git checkout -- .
 git checkout abc123 -- file.txt
 git checkout HEAD~3 -- file.txt
 
-# Restaurar desde otra rama
-git checkout main -- config.txt
-git checkout feature-x -- src/utils.js
+# Restaurar desde otra rama (sin cambiar)
+git checkout feature-x -- src/lib.js
+
+# Detached HEAD
+git checkout abc123
+git checkout v1.0.0
+git checkout HEAD~5
 
 # PROBLEMA con checkout:
-git checkout rama           # Cambia rama
-git checkout -- rama        # Restaura archivo llamado "rama"
-# → Ambigüedad confusa
+git checkout rama           # ¿Cambia rama?
+git checkout -- rama        # ¿O restaura archivo llamado "rama"?
+# → Ambigüedad confusa, por eso switch/restore son mejores
 ```
 
-**Casos de uso avanzados:**
+---
+
+### Detached HEAD - Explicación Completa
+
+**¿Qué es Detached HEAD?**
 
 ```bash
-# Caso 1: Olvidé cambiar de rama antes de trabajar
-git stash
-git switch feature
-git stash pop
-# o:
-git switch -m feature
+# Estado normal (HEAD apunta a rama):
+.git/HEAD contiene: ref: refs/heads/main
+→ HEAD → main → commit abc123
 
-# Caso 2: Quiero archivo de otra rama sin cambiar
-git checkout feature -- src/lib.js
+# Detached HEAD (HEAD apunta a commit directamente):
+.git/HEAD contiene: abc123
+→ HEAD → commit abc123 (sin rama)
 
-# Caso 3: Explorar bug histórico
-git log --oneline | grep "bug aparece"
+# Problema: Commits en detached HEAD quedan "huérfanos"
+# Si cambias a otra rama, pierdes referencia a esos commits
+```
+
+**Entrar en Detached HEAD:**
+
+```bash
+# Con switch (moderno):
 git switch --detach abc123
-npm test
-git switch main
+git switch --detach HEAD~3
+git switch --detach v1.0.0
 
-# Caso 4: Recuperar archivo borrado hace commits
-git log --oneline --all --full-history -- deleted-file.txt
-git restore --source=abc123 -- deleted-file.txt
-
-# Caso 5: Crear hotfix desde tag de producción
-git switch -c hotfix/critical v1.2.3
+# Con checkout (legacy):
+git checkout abc123
+git checkout HEAD~5
+git checkout v1.0.0
+git checkout tags/v1.0.0
 ```
 
-**Troubleshooting:**
+**¿Por qué usar Detached HEAD?**
 
 ```bash
-# Problema 1: No puedo cambiar (cambios sin commitear)
+✓ Inspeccionar código antiguo sin crear rama
+✓ Probar build de versión específica
+✓ Reproducir bug histórico
+✓ Auditar cambios
+✓ Ejecutar tests en commit específico
+
+✗ NO para desarrollo (commits se pierden fácilmente)
+✗ NO para trabajo que quieres guardar
+```
+
+**Salir de Detached HEAD:**
+
+```bash
+# Opción 1: Volver a rama (descarta trabajo en detached)
+git switch main
+# → Commits hechos en detached quedan sin referencia
+
+# Opción 2: Crear rama con el trabajo (RECOMENDADO)
+git switch -c nueva-rama
+# → Convierte trabajo en rama permanente
+
+# Opción 3: Crear rama apuntando a donde estás
+git branch rescue-branch
+git switch main
+# → rescue-branch guarda tu trabajo
+```
+
+**Recuperar trabajo perdido en Detached HEAD:**
+
+```bash
+# Si saliste de detached sin crear rama:
+git reflog
+# Busca el commit donde estabas
+git switch -c recuperar abc123
+# o
+git checkout -b recuperar abc123
+```
+
+**Ver si estás en Detached HEAD:**
+
+```bash
+git branch
+# * (HEAD detached at abc123)  ← En detached
+# * main                        ← En rama normal
+
+git status
+# HEAD detached at abc123       ← En detached
+# On branch main                ← En rama normal
+```
+
+---
+
+### Casos de Uso Avanzados
+
+**Caso 1: Olvidé cambiar de rama antes de trabajar**
+
+```bash
+# Estás en main, hiciste cambios, querías estar en feature
+git stash
+git switch feature-x
+git stash pop
+
+# o (con merge automático):
+git switch -m feature-x
+```
+
+**Caso 2: Quiero archivo de otra rama sin cambiar**
+
+```bash
+# Con restore (moderno):
+git restore --source=feature-x -- src/lib.js
+
+# Con checkout (legacy):
+git checkout feature-x -- src/lib.js
+```
+
+**Caso 3: Explorar bug histórico**
+
+```bash
+git log --oneline | grep "bug aparece"
+# Encuentra commit: abc123
+
+git switch --detach abc123
+npm test  # Reproduce el bug
+git switch main  # Vuelve a main
+```
+
+**Caso 4: Recuperar archivo borrado hace commits**
+
+```bash
+git log --oneline --all --full-history -- deleted-file.txt
+# Encuentra último commit: def456
+
+git restore --source=def456 -- deleted-file.txt
+```
+
+**Caso 5: Crear hotfix desde tag de producción**
+
+```bash
+git switch -c hotfix/critical v1.2.3
+# ... fix ...
+git commit -am "fix: Critical issue"
+```
+
+---
+
+### Troubleshooting
+
+**Problema 1: No puedo cambiar (cambios sin commitear)**
+
+```bash
 Solución A: Commitear
 git add .
 git commit -m "WIP"
+git switch otra-rama
 
 Solución B: Stash
 git stash
 git switch otra-rama
+git stash pop
 
 Solución C: Switch con merge
 git switch -m otra-rama
 
 Solución D: Forzar (⚠️ pierdes cambios)
 git switch -f otra-rama
-
-# Problema 2: Hice commits en Detached HEAD
-git reflog
-git switch -c rescue-branch 123xyz
-
-# Problema 3: Archivo y rama con mismo nombre
-git switch test          # Definitivamente rama
-git restore test         # Definitivamente archivo
-git checkout -- test     # Fuerza archivo (legacy)
-
-# Problema 4: Cambié de rama y perdí trabajo
-git reflog
-git switch -c recuperar HEAD@{1}
 ```
 
-**Mejores prácticas:**
+**Problema 2: Hice commits en Detached HEAD**
 
 ```bash
-✓ Usa git switch para cambiar ramas
-✓ Usa git restore para archivos
+git reflog
+# Encuentra el commit: abc123
+git switch -c rescue-branch abc123
+```
+
+**Problema 3: Archivo y rama con mismo nombre**
+
+```bash
+# Moderno (sin ambigüedad):
+git switch test          # Definitivamente rama
+git restore test         # Definitivamente archivo
+
+# Legacy (ambiguo):
+git checkout test        # ¿Rama o archivo?
+git checkout -- test     # Fuerza archivo
+```
+
+**Problema 4: Cambié de rama y perdí trabajo**
+
+```bash
+git reflog
+git switch -c recuperar HEAD@{1}
+# o
+git checkout -b recuperar HEAD@{1}
+```
+
+---
+
+### Mejores Prácticas
+
+```bash
+✓ Usa git switch para cambiar ramas (claro y específico)
+✓ Usa git restore para archivos (sin ambigüedad)
 ✓ Commitea o stash antes de cambiar ramas
 ✓ Entiende detached HEAD antes de usarlo
-✓ Usa git switch -c para crear ramas
-✓ Anota hashes importantes en detached HEAD
+✓ Crea rama desde detached si hiciste commits
+✓ Usa git switch - para alternar entre dos ramas
 
-✗ Evita checkout ambiguo
-✗ No trabajes en detached HEAD sin crear rama
-✗ No uses git checkout -- sin el "--"
+✗ Evita git checkout (confuso y ambiguo)
+✗ No trabajes en detached HEAD sin crear rama después
+✗ No uses git checkout sin "--" para archivos
 ✗ No confundas switch (ramas) con restore (archivos)
+✗ No asumas que checkout siempre cambia ramas
 ```
 
 ---
