@@ -4,8 +4,11 @@
 
 ---
 
-## ¿Qué hace?
-Prepara cambios del working directory para el próximo commit, moviéndolos al staging area (index).
+## 1. git add - Preparando Cambios
+[⬆️ Top](#1-git-add---preparando-cambios)
+
+**¿Qué hace?**
+Prepara cambios del working directory para el próximo commit, moviéndolos al staging area (index). Es el paso intermedio entre modificar archivos y crear un commit: te permite elegir exactamente qué cambios quieres incluir.
 
 **Funcionamiento interno:** [🔙](#1-git-add---preparando-cambios)
 
@@ -152,52 +155,94 @@ git add -v archivo.txt
 **Ver qué está stageado:** [🔙](#1-git-add---preparando-cambios)
 
 ```bash
-# Ver estado
+# Ver estado general (qué está staged y qué no):
 git status
-# → Muestra archivos stageados y no stageados
 
-# Ver diferencias stageadas
+# Ver diferencias stageadas (lo que VA a entrar en el commit):
 git diff --staged
-# o: git diff --cached
+# ó equivalente:
+git diff --cached
 # → Muestra QUÉ cambios están en staging
 
-# Ver diferencias NO stageadas
+# Ver diferencias NO stageadas (lo que tienes modificado sin añadir):
 git diff
-# → Muestra cambios en working directory
-# → Que NO están en staging
+# → Muestra cambios en working directory que NO están en staging
+```
+
+**Casos de uso reales:** [🔙](#1-git-add---preparando-cambios)
+
+```bash
+# ─────────────────────────────────────────────────────────────────
+# CASO 1: Añadir todo antes de un commit (lo más común)
+# ─────────────────────────────────────────────────────────────────
+# Modificaste varios archivos de una misma feature y quieres commitearlos todos.
+git status                    # Ver qué cambió
+git diff                      # Revisar los cambios
+git add .                     # Añadir todo
+git diff --staged             # Confirmar qué va en el commit
+git commit -m "feat: add product search"
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 2: Separar en 2 commits cambios que están en el mismo archivo
+# ─────────────────────────────────────────────────────────────────
+# Modificaste un archivo con dos cambios independientes.
+# Quieres que cada uno quede en un commit separado.
+git add -p src/products.js    # Modo interactivo por hunks
+# Git muestra el primer cambio:
+# → y (yes): stagear este hunk y pasar al siguiente
+# → n (no): no stagear, pasar al siguiente
+# → s (split): intentar dividir el hunk en partes más pequeñas
+# Aceptas solo los hunks del primer cambio
+git commit -m "feat: add search by category"
+
+git add src/products.js       # El resto del archivo ya modificado
+git commit -m "fix: correct pagination calculation"
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 3: Añadir solo archivos ya conocidos (ignorar los nuevos)
+# ─────────────────────────────────────────────────────────────────
+# Trabajas en código existente, tienes archivos nuevos temporales
+# que no quieres incluir todavía.
+git add -u
+# → Solo actualiza archivos que ya Git rastreaba
+# → NO añade los nuevos archivos (untracked)
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 4: Ver qué añadiría git add . SIN hacerlo
+# ─────────────────────────────────────────────────────────────────
+git add -n .
+# → Muestra los archivos que se añadirían, sin modificar el staging
+# → Útil para verificar que .gitignore está funcionando bien
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 5: Deshacer un git add (sacar del staging)
+# ─────────────────────────────────────────────────────────────────
+# Hiciste "git add ." y añadiste un archivo que no querías.
+git restore --staged archivo-no-deseado.txt
+# ó forma más antigua:
+git reset HEAD archivo-no-deseado.txt
+# → El archivo vuelve al working directory, sin staging
+# → El contenido del archivo NO cambia
 ```
 
 **Mejores prácticas:** [🔙](#1-git-add---preparando-cambios)
 
 ```bash
-✓ Usa git add -p para commits granulares
-✓ Revisa con git diff --staged antes de commit
-✓ No uses git add . ciegamente, revisa qué añades
-✓ Usa .gitignore para archivos que nunca deben añadirse
-✓ Considera git add -u cuando solo actualizas existentes
+✓ Usa git add -p para commits granulares y atómicos
+✓ Revisa con git diff --staged antes de commit (evita sorpresas)
+✓ Usa git add -n para verificar qué incluirías antes de stagear
+✓ Usa .gitignore para que ciertos archivos nunca se puedan añadir
+✓ Considera git add -u cuando solo actualizas archivos ya existentes
 
-✗ Evita git add * (puede añadir archivos no deseados)
-✗ No uses git add -f a menos que sea absolutamente necesario
-✗ No stagees archivos generados (builds, logs, node_modules)
+✗ No hagas git add . ciegamente sin revisar git status primero
+✗ No stagees archivos generados (dist/, node_modules/, *.pyc, *.class)
+✗ No stagees archivos de configuración local (.env, .idea/, .vscode/)
+✗ No uses git add -f (forzar ignorados) sin una razón muy clara
 ```
-# → Ves hunk con feature B: presionas 'n'
-git commit -m "feat: Add feature A"
-
-git add archivo.py
-git commit -m "feat: Add feature B"
-```
-
-**Mejores prácticas:**
-
-✓ Usa git add -p para commits granulares
-✓ Revisa con git diff --staged antes de commit
-✓ Usa .gitignore para archivos que nunca deben añadirse
-
-✗ Evita git add * (puede añadir no deseados)
-✗ No stagees archivos generados (builds, node_modules)
-```
-
----
 
 
 ---

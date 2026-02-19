@@ -70,298 +70,480 @@ Internamente:
 # ============================================
 
 # 1. Merge básico (comportamiento por defecto)
+# ─────────────────────────────────────────────
+# Situación: Terminaste una feature y quieres integrarla a main.
+# Git decide automáticamente cómo hacerlo:
+#   - Si main no avanzó desde que creaste la rama → fast-forward (sin commit extra)
+#   - Si main sí avanzó → crea un commit de merge
 git merge feature-x
-# → Fast-forward si es posible
-# → Three-way merge si no
 
-# 2. Forzar merge commit (sin fast-forward)
+
+# 2. --no-ff → Forzar siempre un commit de merge
+# ─────────────────────────────────────────────
+# Situación: Quieres que en el historial quede visible que
+# "aquí se integró la feature X", aunque no fuera necesario técnicamente.
+#
+# Sin --no-ff el historial queda así (no se distingue):
+#   A---B---C---D  (main)
+#
+# Con --no-ff el historial queda así (se ve claramente la feature):
+#   A---B---C---M  (main)
+#            \ /
+#             D  (feature-x)
+#
+# Beneficio: Si algún día la feature da problemas, puedes revertirla
+# de un solo golpe con "git revert -m 1 M" sin afectar nada más.
 git merge --no-ff feature-x
-# → SIEMPRE crea merge commit
-# → Preserva historia de rama
-# → Útil para features importantes
-# → Mantiene visible qué commits pertenecían a la feature
 
-# 3. Solo fast-forward (falla si no es posible)
+
+# 3. --ff-only → Solo merge si NO hace falta commit extra
+# ─────────────────────────────────────────────
+# Situación: Trabajas solo en una rama y quieres garantizar que
+# el historial siempre sea una línea recta, sin ramificaciones.
+# Si main avanzó mientras trabajabas, el comando falla con un error
+# en lugar de crear un merge commit. Te obliga a hacer rebase primero.
+#
+# Útil en proyectos donde el equipo tiene la norma de "historia siempre lineal".
 git merge --ff-only feature-x
-# → Solo avanza puntero
-# → Falla si requiere merge commit
-# → Útil para mantener historia lineal estricta
-# → Común en workflows con rebase
+# Si falla: primero haz  →  git rebase main  (desde tu rama)
 
-# 4. Squash merge (aplasta todos los commits en uno)
+
+# 4. --squash → Comprimir todos los commits de la rama en uno solo
+# ─────────────────────────────────────────────
+# Situación: Estuviste trabajando en una feature durante 3 días
+# y tienes 20 commits tipo "wip", "fix typo", "arreglando de nuevo"...
+# No quieres contaminar el historial de main con esos commits internos.
+# Con --squash, todos esos cambios llegan a main como un ÚNICO commit limpio.
+#
+# Antes (rama feature-x tiene 20 commits):
+#   wip → fix → fix2 → test → arreglo → ... (20 commits)
+#
+# Después en main:
+#   "Add complete user login feature"  ← 1 solo commit limpio
+#
+# ⚠️ Importante: --squash NO hace el commit automáticamente.
+#    Después debes hacer "git commit" manualmente con un buen mensaje.
+# ⚠️ La rama feature-x NO queda marcada como mergeada (usa -d con cuidado).
 git merge --squash feature-x
-# → Aplica TODOS los cambios de feature-x
-# → NO crea merge commit automáticamente
-# → Debes hacer commit manual después
-# → Resultado: 1 solo commit en main
-# → Pierde historia individual de commits de feature
-git commit -m "Add complete feature X"
+git commit -m "Add complete user login feature"
 
-# 5. Merge con edición de mensaje
+
+# 5. --edit / --no-edit → Controlar el mensaje del commit de merge
+# ─────────────────────────────────────────────
+# Situación: Al hacer merge, Git genera automáticamente un mensaje
+# como "Merge branch 'feature-x'". A veces quieres personalizarlo
+# para añadir más contexto (qué hace la feature, issue relacionado, etc.)
+#
+# --edit  → Abre el editor para que escribas tu propio mensaje
 git merge --edit feature-x
-# → Abre editor para personalizar mensaje de merge commit
-# → Por defecto usa mensaje automático
 
+# --no-edit → Usa el mensaje automático sin preguntar (útil en scripts/CI)
 git merge --no-edit feature-x
-# → Usa mensaje automático sin preguntar
+
 
 # ============================================
-# ESTRATEGIAS DE MERGE
+# ESTRATEGIAS PARA RESOLVER CONFLICTOS AUTOMÁTICAMENTE
 # ============================================
+# Cuando dos ramas modifican la misma línea de un archivo,
+# Git no sabe qué versión mantener → conflicto.
+# Las siguientes opciones le dicen a Git cómo resolverlos sin preguntarte.
+# ⚠️ Úsalas solo cuando estés seguro de qué versión es la correcta.
 
-# 6. Estrategia "ours" (en conflictos, prefiere nuestra versión)
+
+# 6. -X ours → En conflictos, ganar siempre nuestra versión
+# ─────────────────────────────────────────────
+# Situación: Estás integrando una rama externa o de un compañero,
+# pero sabes que TU versión del código es la que debe prevalecer
+# en todos los conflictos. En lugar de resolverlos uno a uno, le
+# dices a Git: "si hay conflicto, quédate con lo que tengo yo".
+#
+# Ejemplo real: Merge de una rama de traducción que tocó archivos
+# de configuración que tú también modificaste, y tu versión es la correcta.
 git merge -X ours feature-x
-# → En conflictos automáticos, usa versión de rama actual
-# → CUIDADO: Puede silenciar cambios importantes
-# → Útil cuando estás seguro de que tu versión es correcta
 
-# 7. Estrategia "theirs" (en conflictos, prefiere su versión)
+
+# 7. -X theirs → En conflictos, ganar siempre la versión entrante
+# ─────────────────────────────────────────────
+# Situación: Quieres traer una rama de otro equipo y en caso de
+# conflicto, aceptar siempre su versión. Por ejemplo, estás
+# integrando una actualización de un proveedor externo y sus
+# cambios son los que deben quedar.
 git merge -X theirs feature-x
-# → En conflictos automáticos, usa versión de rama entrante
-# → CUIDADO: Puede sobrescribir tu trabajo
-# → Útil cuando aceptas completamente los cambios externos
 
-# 8. Estrategia "recursive" (por defecto, más opciones)
+
+# 8. -s recursive -X patience → Algoritmo más inteligente para conflictos
+# ─────────────────────────────────────────────
+# Situación: Haces un merge y Git te reporta muchos conflictos,
+# pero cuando los abres, en realidad el código es casi idéntico.
+# Esto pasa porque el algoritmo por defecto de Git (myers) es rápido
+# pero no muy "listo" para detectar qué cambió realmente.
+#
+# El algoritmo "patience" analiza el código con más cuidado y
+# frecuentemente encuentra menos conflictos falsos en archivos
+# grandes o con muchos bloques de código similares.
+#
+# Ejemplo real: Archivos de configuración XML o JSON largos donde
+# el algoritmo por defecto se confunde con llaves y corchetes repetidos.
 git merge -s recursive -X patience feature-x
-# patience: Algoritmo más cuidadoso (más lento, menos conflictos)
 
+# Otros algoritmos disponibles (de menor a mayor precisión/velocidad):
+# myers     → Por defecto. El más rápido.
+# minimal   → Intenta producir el diff más pequeño posible.
+# patience  → Más cuidadoso. Menos conflictos falsos.
+# histogram → Evolución de patience. Generalmente el más preciso.
 git merge -s recursive -X diff-algorithm=histogram feature-x
-# Algoritmos: myers (default), minimal, patience, histogram
 
+
+# 9. -s recursive -X ignore-space-change → Ignorar cambios de espacios
+# ─────────────────────────────────────────────
+# Situación: Tu compañero reformateó un archivo (cambió indentación,
+# añadió espacios, etc.) pero no cambió la lógica. Al hacer merge,
+# Git detecta conflictos en todas esas líneas aunque el código sea
+# funcionalmente idéntico.
+#
+# Con esta opción, Git ignora esos cambios de espacios al comparar
+# y solo marca conflicto cuando la lógica real es diferente.
 git merge -s recursive -X ignore-space-change feature-x
-# Ignora cambios solo de espacios en blanco
 
-git merge -s recursive -X ignore-all-space feature-x
-# Ignora todos los espacios al comparar
+# Variantes:
+# ignore-all-space    → Ignora TODOS los espacios (más agresivo)
+# ignore-space-at-eol → Solo ignora espacios al final de línea
 
-git merge -s recursive -X ignore-space-at-eol feature-x
-# Ignora espacios al final de línea
 
+# 10. -s recursive -X renormalize → Ignorar conflictos de saltos de línea
+# ─────────────────────────────────────────────
+# Situación: En equipos mixtos (Windows + Linux/Mac), los archivos
+# a veces tienen diferentes tipos de salto de línea: Windows usa CRLF (\r\n)
+# y Linux/Mac usa LF (\n). Al hacer merge entre ramas de distintos sistemas,
+# Git puede ver conflictos en cada línea del archivo aunque nadie cambió nada.
+#
+# Con renormalize, Git normaliza los saltos de línea antes de comparar,
+# evitando esos conflictos falsos.
 git merge -s recursive -X renormalize feature-x
-# Re-normaliza archivos (útil con cambios de line-endings)
 
-# 9. Estrategia "octopus" (merge múltiples ramas)
-git merge branch1 branch2 branch3
-# → Merge de 3+ ramas simultáneamente
-# → Falla si hay conflictos (no soporta resolución manual)
-# → Útil para integrar múltiples features simples
 
-# 10. Estrategia "ours" (NO confundir con -X ours)
-git merge -s ours old-feature
-# → IGNORA completamente cambios de old-feature
-# → Solo registra merge en historia
-# → Útil para marcar rama como mergeada sin aplicar cambios
-# → Diferente de -X ours (que sí intenta merge)
+# 11. Merge de múltiples ramas a la vez (Octopus merge)
+# ─────────────────────────────────────────────
+# Situación: Tienes 3 ramas independientes (feature-a, feature-b, feature-c)
+# que no se tocan entre sí (modifican archivos distintos) y quieres
+# integrarlas todas de golpe en develop. En vez de hacer 3 merges separados,
+# puedes hacerlos todos en un solo comando.
+#
+# ⚠️ Limitación importante: si hay conflictos entre las ramas, este merge
+# falla y tendrás que hacerlos por separado.
+git merge feature-a feature-b feature-c
 
-# 11. Estrategia "subtree"
-git merge -s subtree -X subtree=libs/ external-lib
-# → Merge de repositorio externo como subdirectorio
-# → Útil para dependencias embebidas
+
+# 12. -s ours → Fingir que mergeaste sin aplicar nada
+# ─────────────────────────────────────────────
+# Situación: Tienes una rama antigua (old-experiment) que ya no quieres,
+# pero Git sigue mostrándola como "no mergeada" en "git branch --no-merged".
+# Con esta opción le dices a Git "sí, ya está mergeada" aunque en realidad
+# NO se aplica ningún cambio de esa rama.
+#
+# ⚠️ NO confundir con "-X ours" (punto 6):
+#   -s ours  → Ignora COMPLETAMENTE la otra rama. No aplica nada.
+#   -X ours  → Sí intenta el merge, pero gana tu versión en conflictos.
+git merge -s ours old-experiment
+
+
+# 13. -s subtree → Integrar un proyecto externo dentro de un subdirectorio
+# ─────────────────────────────────────────────
+# Situación: Quieres incluir otro repositorio Git completo dentro
+# de una carpeta de tu proyecto (por ejemplo, una librería que también
+# desarrollas tú). Es parecido a los "git submodules" pero el código
+# queda directamente dentro de tu repo, no como referencia externa.
+#
+# Ejemplo real: Tienes el repo "mi-app" y quieres meter el repo
+# "mi-libreria" dentro de la carpeta "libs/". Con subtree, los commits
+# de "mi-libreria" se integran en tu proyecto mapeados a esa carpeta.
+#
+# Antes de usarlo por primera vez, debes añadir el repo externo como remoto:
+git remote add external-lib https://github.com/usuario/mi-libreria.git
+git fetch external-lib
+git merge -s subtree -X subtree=libs/ external-lib/main
+
 
 # ============================================
 # OPCIONES DE CONTROL Y VERIFICACIÓN
 # ============================================
 
-# 12. Verificar merge sin hacerlo
+# 14. --no-commit --no-ff → Preparar el merge pero sin confirmar
+# ─────────────────────────────────────────────
+# Situación: Antes de hacer el merge definitivo, quieres ver exactamente
+# qué cambios van a entrar, ejecutar los tests, o revisar si algo
+# se va a romper. Con estas opciones, Git prepara todos los cambios
+# en el staging area pero NO hace el commit todavía.
+# Es como un "merge de prueba" que puedes inspeccionar antes de confirmar.
 git merge --no-commit --no-ff feature-x
-# → Prepara merge pero NO commitea
-# → Permite revisar antes de finalizar
-# → Útil para verificar resultado
-# Luego:
-git commit  # Para finalizar
-# o
-git merge --abort  # Para cancelar
+git diff --staged   # Ver qué va a entrar
+npm test            # Comprobar que todo funciona
+git commit          # Si todo está bien → confirmar
+# o si algo falla:
+git merge --abort   # Cancelar y volver al estado anterior
 
-# 13. Ver qué se va a mergear
-git log HEAD..feature-x
-# → Commits que entrarán en merge
-git diff HEAD...feature-x
-# → Cambios desde punto de divergencia
 
-# 14. Merge con log de commits incluidos
+# 15. Ver qué va a entrar ANTES de hacer el merge
+# ─────────────────────────────────────────────
+# Situación: Quieres saber qué commits y qué cambios trae feature-x
+# antes de integrarla, sin tocar nada.
+git log HEAD..feature-x --oneline   # Lista de commits que van a entrar
+git diff HEAD...feature-x           # Cambios concretos desde el punto de divergencia
+
+
+# 16. --log → Incluir lista de commits en el mensaje de merge
+# ─────────────────────────────────────────────
+# Situación: Al hacer merge, quieres que el commit de merge incluya
+# automáticamente un resumen de todos los commits que entran.
+# Útil para tener un historial más descriptivo sin escribirlo a mano.
+#
+# El mensaje resultante sería algo así:
+#   Merge branch 'feature-login'
+#   * Add login form
+#   * Add password validation
+#   * Add session management
 git merge --log feature-x
-# → Incluye resumen de commits en mensaje
-git merge --no-log feature-x
-# → No incluye resumen
 
-# 15. Merge con firma GPG
+
+# 17. -S → Firmar el merge commit con tu clave GPG
+# ─────────────────────────────────────────────
+# Situación: En proyectos con requisitos de seguridad, se exige
+# que cada commit esté firmado digitalmente para verificar que
+# fue hecho por quien dice haberlo hecho (y no fue alterado).
+# Requiere tener configurada una clave GPG.
 git merge -S feature-x
-# → Firma merge commit con GPG
-# → Para verificación de autoría
 
-# 16. Merge verboso
-git merge -v feature-x
-# → Muestra información detallada del proceso
 
-git merge -q feature-x
-# → Modo silencioso (solo errores)
+# 18. -v / -q → Modo verboso o silencioso
+# ─────────────────────────────────────────────
+git merge -v feature-x   # Muestra detalles de lo que está haciendo (útil para aprender)
+git merge -q feature-x   # Solo muestra errores (útil en scripts automáticos)
+
 
 # ============================================
 # MANEJO DE MERGE EN PROGRESO
 # ============================================
 
-# 17. Abortar merge
+# 19. --abort → Cancelar un merge que salió mal
+# ─────────────────────────────────────────────
+# Situación: Empezaste un merge, te aparecieron conflictos,
+# y prefieres cancelarlo todo y volver al estado de antes.
+# Git deshace todo lo que había empezado a mezclar.
 git merge --abort
-# → Cancela merge en curso
-# → Restaura estado pre-merge
-# → Solo funciona si merge no está completo
 
-# 18. Continuar merge tras resolver conflictos
-git add archivo-resuelto.txt
-git commit
-# → Git detecta merge en progreso
-# → Usa mensaje de merge automático
 
-# 19. Estado de merge en progreso
+# 20. Continuar el merge después de resolver conflictos
+# ─────────────────────────────────────────────
+# Situación: Hiciste merge, aparecieron conflictos, los resolviste
+# manualmente editando los archivos, y ahora quieres finalizar.
+git add archivo-resuelto.txt   # Marcar como resuelto
+git commit                     # Git detecta que había merge en curso
+                                # y usa el mensaje de merge automáticamente
+
+
+# 21. Ver el estado actual de un merge en progreso
+# ─────────────────────────────────────────────
+# Situación: No sabes si tienes un merge a medias o qué archivos
+# todavía tienen conflictos sin resolver.
 git status
-# → Muestra archivos en conflicto
-# → Indica que merge está pendiente
+# Muestra:
+#   - "Unmerged paths" → archivos CON conflictos pendientes
+#   - "Changes to be committed" → archivos ya resueltos
 
-ls -la .git/
-# → .git/MERGE_HEAD existe durante merge
-# → Contiene SHA del commit siendo mergeado
+# También puedes verificar si hay merge en progreso:
+ls .git/MERGE_HEAD   # Si este archivo existe → hay merge en curso
+cat .git/MERGE_HEAD  # Muestra el SHA del commit que se está mergeando
 ```
 
 **Resolución de conflictos - Guía completa:** [🔙](#8-git-merge---integrando-cambios)
 
 ```bash
 # ============================================
-# IDENTIFICAR CONFLICTOS
+# ¿QUÉ ES UN CONFLICTO Y CUÁNDO OCURRE?
+# ============================================
+# Un conflicto ocurre cuando dos personas (o dos ramas) modificaron
+# la MISMA línea del MISMO archivo de forma diferente.
+# Git no sabe cuál de las dos versiones es la correcta, así que
+# se detiene y te pide que tú decidas.
+#
+# Ejemplo: Tú cambiaste la línea 42 de config.js a "timeout: 5000"
+#          Tu compañero la cambió a "timeout: 3000"
+#          Git no puede saber cuál es la correcta → conflicto.
+#
+# Mientras haya conflictos sin resolver, el merge está "pausado"
+# y NO puedes hacer commits normales hasta resolverlos.
+
+# ============================================
+# PASO 1: VER QUÉ ARCHIVOS TIENEN CONFLICTOS
 # ============================================
 
-# Ver archivos en conflicto
+# Ver todos los archivos con conflicto
 git status
-# Muestra:
-# - Unmerged paths (archivos con conflictos)
-# - Changes to be committed (archivos auto-mergeados)
+# Los archivos conflictivos aparecen bajo "Unmerged paths:"
+# con el estado "both modified" (ambos lo modificaron)
 
-# Listar solo archivos con conflictos
+# Ver solo la lista de archivos en conflicto (más limpio)
 git diff --name-only --diff-filter=U
 
-# Ver conflictos con contexto
+# Ver el detalle de qué líneas están en conflicto
 git diff
 
-# Ver estadísticas de conflictos
-git diff --stat
-
 # ============================================
-# ANATOMÍA DE UN CONFLICTO
+# PASO 2: ENTENDER LAS MARCAS DE CONFLICTO
 # ============================================
+# Cuando abres un archivo en conflicto, verás algo así:
 
-# Git marca conflictos en el archivo:
-<<<<<<< HEAD (rama actual)
-código de la rama actual (main)
-este código estaba aquí antes
+<<<<<<< HEAD
+timeout: 5000   ← TU versión (la que tenías en tu rama actual)
 =======
-código de la rama entrante (feature-x)
-este código viene del merge
->>>>>>> feature-x (rama que se está mergeando)
+timeout: 3000   ← LA VERSIÓN ENTRANTE (la de la rama que mergeaste)
+>>>>>>> feature-x
 
-# Significado de marcadores:
-# <<<<<<< HEAD        → Inicio de tu versión
-# =======             → Separador
-# >>>>>>> feature-x   → Fin de su versión
+# Explicación de las marcas:
+# <<<<<<< HEAD        → Aquí empieza TU versión
+# =======             → Separador entre las dos versiones
+# >>>>>>> feature-x   → Aquí termina la versión de la otra rama
+
+# Tu tarea es: borrar las marcas (<<<, ===, >>>) y dejar el código
+# como debe quedar. Puedes quedarte con una versión, con la otra,
+# o combinar ambas.
 
 # ============================================
-# ESTRATEGIAS DE RESOLUCIÓN
+# PASO 3: RESOLVER EL CONFLICTO
 # ============================================
 
-# 1. Resolución manual (más común)
-# - Abre archivo en editor
-# - Elimina marcadores <<<, ===, >>>
-# - Edita código para combinar o elegir
-# - Guarda archivo
+# OPCIÓN A: Resolución manual (la más habitual y recomendada)
+# ─────────────────────────────────────────────
+# 1. Abre el archivo en tu editor
+# 2. Busca las marcas <<<, ===, >>>
+# 3. Edita el código para que quede como debe quedar
+# 4. Borra todas las marcas de conflicto
+# 5. Guarda el archivo
+git add archivo.txt    # Le dices a Git que ya resolviste este archivo
+git commit             # Finalizas el merge
+
+
+# OPCIÓN B: Quedarte con TU versión completa (sin editar)
+# ─────────────────────────────────────────────
+# Situación: Sabes con certeza que TU versión es la correcta
+# y quieres descartar completamente los cambios de la otra rama.
+git restore --ours archivo.txt
 git add archivo.txt
-git commit
 
-# 2. Aceptar versión completa (sin editar)
-git checkout --ours archivo.txt    # Usar nuestra versión
+
+# OPCIÓN C: Quedarte con la versión ENTRANTE completa
+# ─────────────────────────────────────────────
+# Situación: Sabes que los cambios de la otra rama son los correctos
+# y quieres descartar tu versión del archivo.
+git restore --theirs archivo.txt
 git add archivo.txt
 
-git checkout --theirs archivo.txt  # Usar su versión
-git add archivo.txt
 
-# 3. Ver diferencias durante conflicto
-git diff --ours      # Diferencias con nuestra versión
-git diff --theirs    # Diferencias con su versión
-git diff --base      # Diferencias con ancestro común
+# OPCIÓN D: Ver ambas versiones antes de decidir
+# ─────────────────────────────────────────────
+# Si no tienes claro cuál versión elegir, primero observa
+# qué cambió cada uno:
+git diff --ours      # Muestra qué diferencia hay entre el ancestro y TU versión
+git diff --theirs    # Muestra qué diferencia hay entre el ancestro y la versión entrante
+git diff --base      # Muestra cómo era el archivo antes de que nadie lo tocara
 
-# 4. Herramienta visual de merge
+# Ver el contenido exacto de cada versión:
+git show :1:archivo.txt  # Cómo era ANTES del merge (ancestro común)
+git show :2:archivo.txt  # Tu versión (HEAD)
+git show :3:archivo.txt  # La versión entrante (feature-x)
+
+# Guardarlos en archivos separados para compararlos con calma:
+git show :2:archivo.txt > version-mia.txt
+git show :3:archivo.txt > version-suya.txt
+
+
+# OPCIÓN E: Usar herramienta visual (recomendado para conflictos complejos)
+# ─────────────────────────────────────────────
+# Situación: El conflicto es en un archivo grande o complejo y
+# resolver línea a línea en el editor es confuso. Una herramienta
+# visual muestra las dos versiones en paralelo y te permite elegir
+# con más claridad.
 git mergetool
-# → Abre herramienta configurada (vimdiff, meld, kdiff3, etc.)
-# → Muestra 3 paneles: base, ours, theirs
-# → Facilita resolución visual
+# Abre la herramienta configurada (meld, vimdiff, kdiff3, vscode, etc.)
+# Muestra 3 paneles: versión anterior (base), TU versión, versión entrante
+# Puedes hacer clic para elegir qué líneas conservar
 
-# Configurar herramienta:
+# Configurar VSCode como herramienta de merge:
+git config --global merge.tool vscode
+git config --global mergetool.vscode.cmd 'code --wait $MERGED'
+
+# Configurar meld (más visual, recomendado para principiantes):
 git config --global merge.tool meld
 git config --global mergetool.prompt false
 
-# 5. Ver contenido de versiones específicas
-git show :1:archivo.txt  # Versión ancestro común (base)
-git show :2:archivo.txt  # Versión nuestra (ours/HEAD)
-git show :3:archivo.txt  # Versión suya (theirs)
-
-# Guardar para comparar:
-git show :2:archivo.txt > archivo-ours.txt
-git show :3:archivo.txt > archivo-theirs.txt
-# Comparar con herramienta externa
-
 # ============================================
-# CASOS ESPECIALES
+# CASOS ESPECIALES DE CONFLICTO
 # ============================================
 
-# Conflictos en archivos binarios
-git checkout --ours archivo.bin
+# CASO: Conflicto en archivo binario (imagen, PDF, etc.)
+# ─────────────────────────────────────────────
+# Los archivos binarios no se pueden resolver línea a línea.
+# Git solo puede quedarse con UNA de las dos versiones completas.
+git restore --ours archivo.png    # Conservar TU versión del binario
 # o
-git checkout --theirs archivo.bin
-# (No se pueden resolver manualmente línea a línea)
+git restore --theirs archivo.png  # Conservar la versión entrante
+git add archivo.png
 
-# Conflictos por archivo eliminado en una rama
-# Git pregunta si mantener o eliminar:
-git rm archivo.txt      # Confirma eliminación
+
+# CASO: Conflicto porque uno eliminó el archivo y el otro lo modificó
+# ─────────────────────────────────────────────
+# Git no sabe si mantener el archivo (con los cambios) o eliminarlo.
+# Tú decides:
+git rm archivo.txt    # Confirmas la eliminación
 # o
-git add archivo.txt     # Mantiene archivo
+git add archivo.txt   # Decides mantenerlo (con los cambios)
 
-# Conflictos por archivo renombrado
-# Git puede detectar rename automáticamente
-# Si no, resolver manualmente y hacer add
+
+# CASO: Conflicto por archivo renombrado
+# ─────────────────────────────────────────────
+# Ocurre cuando uno renombró un archivo y el otro lo modificó.
+# Git intenta detectarlo automáticamente.
+# Si no lo detecta, debes resolver manualmente:
+#   1. Añade el archivo con el nuevo nombre
+#   2. Elimina el archivo con el nombre antiguo
+#   3. git add + git rm + git commit
+
 
 # ============================================
-# ABORTAR Y REINTENTAR
+# PASO 4: CANCELAR SI TODO SALE MAL
 # ============================================
 
-# Abortar merge completo
+# Si el merge se complica demasiado y quieres volver atrás:
 git merge --abort
-# → Vuelve a estado pre-merge
-# → Útil si te equivocaste en resolución
+# → Cancela todo el merge
+# → Restaura exactamente el estado que había antes de hacer "git merge"
+# → Como si el merge nunca hubiera ocurrido
 
-# Reiniciar resolución de un archivo
-git checkout -m archivo.txt
-# → Restaura marcadores de conflicto
-# → Permite resolver de nuevo
+# Si resolviste mal un archivo y quieres volver a empezar con ese archivo:
+git restore -m archivo.txt
+# → Restaura las marcas de conflicto originales en ese archivo
+# → Puedes volver a resolverlo desde cero
 
-# Ver merge que causó conflicto
-cat .git/MERGE_HEAD
-# → SHA del commit siendo mergeado
-
-git log -1 MERGE_HEAD
-# → Detalles del commit en conflicto
 
 # ============================================
-# POST-RESOLUCIÓN
+# PASO 5: VERIFICAR QUE TODO QUEDÓ BIEN
 # ============================================
 
-# Verificar que no quedan conflictos
+# Comprobar que no quedaron marcas de conflicto sin resolver
 git diff --check
-# → Detecta marcadores de conflicto olvidados
+# → Si aparece algo, aún tienes marcas <<< o >>> en algún archivo
 
-# Verificar que todo compila/funciona
-npm test  # o tu sistema de tests
+# Ver los archivos que ya están resueltos y listos para commit
+git status
+# Los archivos resueltos aparecen bajo "Changes to be committed"
+
+# Ejecutar los tests antes de hacer el commit final
+npm test  # (o el comando de tests de tu proyecto)
 git commit
 
-# Limpiar archivos .orig (backup de mergetool)
+# Limpiar los archivos de backup que crea mergetool (terminan en .orig)
 git clean -f
-# o configurar para no crearlos:
+# o evitar que se creen en el futuro:
 git config --global mergetool.keepBackup false
 ```
 
@@ -371,7 +553,7 @@ git config --global mergetool.keepBackup false
 # ============================================
 # CASO 1: Feature simple lista para producción
 # ============================================
-git checkout main
+git switch main
 git pull origin main
 git merge --no-ff feature-login
 git push origin main
@@ -381,7 +563,7 @@ git push origin main
 # CASO 2: Sincronizar feature con main
 # ============================================
 # Estás en feature-x, main avanzó, quieres últimos cambios
-git checkout feature-x
+git switch feature-x
 git merge main
 # → Trae cambios de main a tu feature
 # → Resuelve conflictos ahora (no luego en main)
@@ -390,7 +572,7 @@ git merge main
 # ============================================
 # CASO 3: Multiple commits WIP, quieres 1 solo
 # ============================================
-git checkout main
+git switch main
 git merge --squash feature-x
 # Archivo .git/SQUASH_MSG tiene todos los mensajes
 git commit -m "Add user authentication system
@@ -405,11 +587,11 @@ git commit -m "Add user authentication system
 # ============================================
 # CASO 4: Hotfix urgente en producción
 # ============================================
-git checkout main
-git checkout -b hotfix-security
+git switch main
+git switch -c hotfix-security
 # ... fixes ...
 git commit -m "Fix: Security vulnerability CVE-2024-1234"
-git checkout main
+git switch main
 git merge --ff-only hotfix-security
 # → --ff-only asegura merge limpio
 # → Si falla, main se movió y hay que investigar
@@ -419,7 +601,7 @@ git branch -d hotfix-security
 # ============================================
 # CASO 5: Merge de múltiples features independientes
 # ============================================
-git checkout develop
+git switch develop
 git merge feature-a feature-b feature-c
 # → Octopus merge
 # → Solo si no hay conflictos
@@ -450,12 +632,12 @@ git merge -s ours old-experiment
 # CASO 8: Merge de release branch
 # ============================================
 # Merge a main (producción)
-git checkout main
+git switch main
 git merge --no-ff --log release-1.5.0
 # --log incluye lista de commits en mensaje
 
 # Merge de vuelta a develop
-git checkout develop
+git switch develop
 git merge --no-ff release-1.5.0
 
 # ============================================
@@ -463,15 +645,15 @@ git merge --no-ff release-1.5.0
 # ============================================
 git merge feature-x
 # ... conflicto ...
-git checkout --ours .      # Todas las versiones nuestras
+git restore --ours .      # Todas las versiones nuestras
 # o
-git checkout --theirs .    # Todas las versiones de ellos
+git restore --theirs .    # Todas las versiones de ellos
 git add .
 git commit
 
 # Más selectivo (solo ciertos archivos):
-git checkout --ours src/
-git checkout --theirs config/
+git restore --ours src/
+git restore --theirs config/
 git add .
 git commit
 
@@ -501,96 +683,163 @@ git commit
 # ============================================
 # PROBLEMA 1: "Already up to date"
 # ============================================
-git merge feature-x
-# Already up to date.
+# Mensaje que ves:
+#   Already up to date.
+#
+# Qué significa: Git revisó los commits de feature-x y vio que
+# main ya los tiene todos. No hay nada nuevo que integrar.
+#
+# Causas comunes:
+# - Ya hiciste el merge antes sin darte cuenta
+# - Estás en la rama equivocada
+# - La rama feature-x no tiene commits nuevos respecto a main
+#
+# Cómo diagnosticarlo:
+git branch          # ¿Estás en main realmente?
+git log main..feature-x --oneline  # ¿Hay commits en feature-x que no están en main?
+# Si no aparece nada → feature-x no tiene nada nuevo
 
-Causa: feature-x no tiene commits nuevos vs main
-Solución:
-- Verificar que estás en rama correcta
-- Verificar que feature-x tiene commits:
-  git log main..feature-x
 
 # ============================================
 # PROBLEMA 2: "fatal: refusing to merge unrelated histories"
 # ============================================
-Causa: Ramas sin ancestro común (repos separados)
-Solución:
+# Mensaje que ves:
+#   fatal: refusing to merge unrelated histories
+#
+# Qué significa: Las dos ramas (o repositorios) nunca tuvieron
+# un commit en común. Git no puede encontrar un punto de partida
+# compartido para hacer el merge.
+#
+# Cuándo ocurre:
+# - Intentas mergear un repo recién creado con "git init" con otro repo
+# - Conectas un repo local con un remoto que tiene historia completamente diferente
+# - Accidentalmente creaste dos repositorios separados del mismo proyecto
+#
+# Solución (con precaución):
 git merge --allow-unrelated-histories other-branch
-# ⚠️ CUIDADO: Puede crear merge complejo
+# ⚠️ Esto fuerza el merge aunque no haya historia común.
+# Revisa bien el resultado porque puede mezclar archivos de dos proyectos distintos.
+
 
 # ============================================
-# PROBLEMA 3: Merge incompleto, .git/MERGE_HEAD existe
+# PROBLEMA 3: "You have unmerged paths" (merge a medias)
 # ============================================
-git status
-# On branch main
-# You have unmerged paths.
-
-Causa: Merge con conflictos sin resolver
-Solución:
-1. Resolver conflictos:
-   git status  # Ver qué falta
-   # ... resolver ...
-   git add .
-   git commit
-2. O abortar:
-   git merge --abort
-
-# ============================================
-# PROBLEMA 4: Merge commit no deseado
-# ============================================
-# Ya hiciste merge y no querías merge commit
-git reset --hard HEAD~1  # Deshace último commit
-git merge --ff-only feature-x  # Intenta fast-forward
-
-# ============================================
-# PROBLEMA 5: Conflictos masivos, difícil resolver
-# ============================================
-Solución 1: Abortar y usar rebase
+# Mensaje que ves al hacer git status:
+#   On branch main
+#   You have unmerged paths.
+#
+# Qué significa: Iniciaste un merge, aparecieron conflictos,
+# y los dejaste sin resolver. Git está "parado" esperando que
+# termines la resolución.
+#
+# Cómo saberlo:
+git status  # Muestra archivos bajo "Unmerged paths"
+ls .git/MERGE_HEAD  # Si existe este archivo → hay merge en curso
+#
+# Solución 1: Terminar el merge resolviendo los conflictos
+git status          # Ver qué archivos tienen conflicto
+# Abre cada archivo y resuelve los marcadores <<<, ===, >>>
+git add archivo.txt # Marca cada archivo como resuelto
+git commit          # Finaliza el merge
+#
+# Solución 2: Cancelar todo y volver al estado anterior
 git merge --abort
-git rebase main  # Resuelve conflicto por conflicto
 
-Solución 2: Estrategia más agresiva
-git merge -X theirs feature-x
-# LUEGO revisa cambios críticos manualmente
-
-Solución 3: Resolver en herramienta visual
-git mergetool
 
 # ============================================
-# PROBLEMA 6: Merge eliminó archivo que debería existir
+# PROBLEMA 4: Hiciste merge pero no querías commit de merge
 # ============================================
-# Git puede auto-mergear eliminación incorrectamente
-git show HEAD:archivo-perdido.txt > archivo-perdido.txt
-git add archivo-perdido.txt
-git commit --amend  # Corrige merge commit
+# Situación: Hiciste "git merge feature-x" y Git creó un merge
+# commit automáticamente, pero tú querías que el historial
+# quedara lineal (sin ese commit extra).
+#
+# Solución: Deshacer el merge y repetirlo con la opción correcta
+git reset --hard HEAD~1        # Deshace el último commit (el merge commit)
+git merge --ff-only feature-x  # Solo permite merge si puede ser fast-forward
+# Si falla → primero hay que hacer rebase en feature-x:
+#   git switch feature-x
+#   git rebase main
+#   git switch main
+#   git merge --ff-only feature-x
+
 
 # ============================================
-# PROBLEMA 7: Merge rompió funcionalidad
+# PROBLEMA 5: Demasiados conflictos, imposible resolver
 # ============================================
-# Opción 1: Revert del merge
+# Situación: El merge generó 50 conflictos en 20 archivos
+# y no sabes por dónde empezar.
+#
+# Estrategia 1: Cancelar y resolver de uno en uno con rebase
+# (rebase aplica los commits de uno en uno, los conflictos
+#  son más pequeños y manejables)
+git merge --abort
+git switch feature-x
+git rebase main     # Conflictos aparecen commit a commit, más fácil de resolver
+
+# Estrategia 2: Aceptar una versión completa y revisar después
+git merge -X theirs feature-x   # Acepta todos los cambios de feature-x
+# Luego revisa manualmente los archivos críticos con:
+git diff HEAD~1                  # Ver qué cambió
+
+# Estrategia 3: Usar herramienta visual para ver mejor los conflictos
+git mergetool  # Abre editor visual (meld, vscode, etc.)
+
+
+# ============================================
+# PROBLEMA 6: El merge borró un archivo que debería existir
+# ============================================
+# Situación: Después del merge, un archivo que necesitas
+# ha desaparecido. Git lo eliminó automáticamente porque
+# en una de las ramas se había borrado.
+#
+# Cómo recuperarlo del commit anterior al merge:
+git show HEAD~1:ruta/archivo-perdido.txt > ruta/archivo-perdido.txt
+git add ruta/archivo-perdido.txt
+git commit --amend  # Modifica el merge commit para incluir el archivo recuperado
+
+
+# ============================================
+# PROBLEMA 7: El merge rompió funcionalidad (ya pusheaste)
+# ============================================
+# Situación: Hiciste merge, lo subiste al remoto, y ahora
+# algo está roto. No puedes simplemente "deshacer" porque
+# ya está en el servidor.
+#
+# Solución recomendada: revert (crea un commit que deshace el merge)
 git revert -m 1 HEAD
-# -m 1 indica mantener lado 1 (main) del merge
+# -m 1 → indica que quieres quedarte con la versión de main (rama principal)
+# Esto es seguro porque NO borra historia, solo añade un commit nuevo
+# que deshace los cambios del merge.
+#
+# Solución alternativa (solo si NO has pusheado o trabajas solo):
+git reset --hard HEAD~1  # ⚠️ Borra el merge commit de la historia local
 
-# Opción 2: Reset (si no pusheaste)
-git reset --hard HEAD~1
 
 # ============================================
-# PROBLEMA 8: No puedes hacer merge (archivos sucios)
+# PROBLEMA 8: "Your local changes would be overwritten by merge"
 # ============================================
-error: Your local changes would be overwritten by merge.
-
-Solución 1: Commitear cambios
+# Mensaje que ves:
+#   error: Your local changes to 'archivo.txt' would be
+#   overwritten by merge. Please commit or stash them.
+#
+# Qué significa: Tienes cambios en tu directorio de trabajo
+# que NO están en un commit, y el merge necesita modificar
+# esos mismos archivos. Git se niega a continuar para no
+# borrar tu trabajo sin que lo hayas guardado.
+#
+# Solución 1: Guardar el trabajo en un commit temporal
 git add .
-git commit -m "WIP"
+git commit -m "WIP: guardando antes de merge"
 git merge feature-x
+# Después puedes hacer amend o squash si el commit WIP no te gusta
 
-Solución 2: Stash
-git stash
-git merge feature-x
-git stash pop
+# Solución 2: Guardar temporalmente con stash (sin crear commit)
+git stash           # Guarda tus cambios en un almacén temporal
+git merge feature-x # Ahora el merge puede proceder
+git stash pop       # Recupera tus cambios guardados
 
-Solución 3: Descartar cambios
-git reset --hard  # ⚠️ PIERDE CAMBIOS
+# Solución 3: Descartar tus cambios (¡CUIDADO: los pierdes para siempre!)
+git restore .       # ⚠️ Descarta todos los cambios no commiteados
 git merge feature-x
 ```
 
@@ -602,7 +851,7 @@ git merge feature-x
 # ============================================
 
 # 1. Siempre actualiza antes de merge
-git checkout main
+git switch main
 git pull origin main
 git merge feature-x
 
@@ -611,10 +860,10 @@ git merge --no-ff feature-login
 # → Historia clara, fácil revertir feature completa
 
 # 3. Resuelve conflictos en feature branch, no en main
-git checkout feature-x
+git switch feature-x
 git merge main
 # ... resolver conflictos ...
-git checkout main
+git switch main
 git merge feature-x  # Ahora sin conflictos
 
 # 4. Testea tras resolver conflictos
@@ -741,11 +990,11 @@ Desventajas:
 # ============================================
 
 # 1. Durante desarrollo: rebase
-git checkout feature-x
+git switch feature-x
 git rebase main  # Mantiene feature actualizada y limpia
 
 # 2. Para integrar: merge
-git checkout main
+git switch main
 git merge --no-ff feature-x  # Integra feature completa
 
 Resultado:

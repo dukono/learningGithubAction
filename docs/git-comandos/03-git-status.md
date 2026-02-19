@@ -4,8 +4,11 @@
 
 ---
 
-## ¿Qué hace?
-Muestra el estado actual del working directory y staging area.
+## 3. git status - Inspeccionando el Estado
+[⬆️ Top](#3-git-status---inspeccionando-el-estado)
+
+**¿Qué hace?**
+Muestra el estado actual del working directory y staging area. Es el comando de "diagnóstico" que usas constantemente para saber en qué punto estás: qué has modificado, qué está preparado para commitear, y cómo estás respecto al remoto.
 
 **Funcionamiento interno:** [🔙](#3-git-status---inspeccionando-el-estado)
 

@@ -4,74 +4,269 @@
 
 ---
 
-## ¿Qué hace?
-Muestra diferencias entre working directory, staging, commits y ramas.
+## 4. git diff - Comparando Cambios
+[⬆️ Top](#4-git-diff---comparando-cambios)
+
+**¿Qué hace?**
+Muestra las diferencias de contenido entre dos fuentes: puede comparar el working directory con el staging area, el staging area con el último commit, dos commits entre sí, o dos ramas. Es la herramienta para responder "¿qué cambié exactamente?".
 
 **Funcionamiento interno:** [🔙](#4-git-diff---comparando-cambios)
 
 ```
-1. Lee contenido de dos fuentes
-2. Ejecuta algoritmo de diff (Myers, patience, histogram)
-3. Genera "hunks" (bloques de diferencias)
-4. Formatea output
+git diff lee el contenido de dos fuentes y aplica un algoritmo de diff:
+
+1. Lee el contenido de las dos fuentes a comparar (blobs, commits, working dir)
+2. Ejecuta el algoritmo de diff elegido:
+   - Myers (default): rápido y eficiente, bueno en general
+   - patience: mejor para refactorizaciones (detecta bloques movidos)
+   - histogram: evolución de patience, mejor para muchos cambios
+3. Genera "hunks" (bloques de diferencias con contexto)
+4. Formatea el output en formato unidiff:
+   - Líneas con "-" = lo que había antes (eliminado)
+   - Líneas con "+" = lo que hay ahora (añadido)
+   - Líneas sin prefijo = contexto (sin cambios, solo para orientarte)
+
+Las tres fuentes principales que puede comparar:
+  Working Directory → lo que tienes modificado en disco, sin git add
+  Staging Area      → lo que tienes preparado para commitear (después de git add)
+  Commits           → cualquier commit del historial, rama, tag
 ```
 
-**Uso práctico:** [🔙](#4-git-diff---comparando-cambios)
+**Todas las opciones importantes:** [🔙](#4-git-diff---comparando-cambios)
 
 ```bash
-# Diff de working (NO stageado)
+# ============================================
+# LAS 3 COMPARACIONES MÁS FRECUENTES
+# ============================================
+
+# 1. Working directory vs Staging (lo NO stageado)
+# Situación: Modificaste archivos pero no hiciste git add.
+# Quieres ver exactamente qué cambiaste antes de añadirlo al staging.
 git diff
+# → Muestra cambios en disco que NO están en staging
+# → Si ya hiciste git add, este diff estará vacío
 
-# Diff de staging (lo que vas a commitear)
+# 2. Staging vs último commit (lo que VAS a commitear)
+# Situación: Hiciste git add y quieres revisar qué está
+# en el staging antes de hacer commit.
 git diff --staged
-# o: git diff --cached
+# ó equivalente:
+git diff --cached
+# → Muestra lo que hay en staging comparado con HEAD
+# → Esto es EXACTAMENTE lo que entrará en el próximo commit
 
-# Diff completo (working vs último commit)
+# 3. Working directory vs último commit (TODOS los cambios)
+# Situación: Quieres ver todo lo que has cambiado desde el último commit,
+# ya sea que esté o no en staging.
 git diff HEAD
+# → Muestra diferencias entre todos tus cambios y HEAD
 
-# Diff entre commits
-git diff abc123 def456
-git diff HEAD~5 HEAD
 
-# Diff entre ramas
-git diff main feature-x
-git diff main...feature-x  # Desde punto de divergencia
+# ============================================
+# COMPARAR COMMITS ENTRE SÍ
+# ============================================
 
-# Diff de archivo específico
-git diff archivo.txt
+# Dos commits específicos:
+git diff abc1234 def5678
+# → Muestra qué cambió entre esos dos commits
+
+# Commit anterior vs HEAD actual:
+git diff HEAD~1
+git diff HEAD~3 HEAD
+
+# Commit anterior en un archivo concreto:
 git diff HEAD~3 -- archivo.txt
+# → Solo muestra cambios de ese archivo entre HEAD~3 y HEAD
 
-# Diff con stats (resumen)
-git diff --stat
 
-# Diff solo nombres de archivos
+# ============================================
+# COMPARAR RAMAS
+# ============================================
+
+# Diferencia entre dos ramas (qué tiene una que no tiene la otra):
+git diff main feature/login
+# → Lo que hay en feature/login comparado con main
+# → Como si preguntaras: "¿qué añadió feature/login respecto a main?"
+
+# Comparar desde el punto de divergencia (.. vs ...):
+git diff main..feature/login    # Equivale a: git diff main feature/login
+git diff main...feature/login   # Diferencia SOLO de lo que feature/login añadió
+                                 # desde que se separó de main (ignora lo que avanzó main)
+# ¿Cuándo usar ...?
+# Cuando main ha avanzado desde que creaste feature/login y quieres ver
+# solo los cambios de la feature, no los de main.
+
+
+# ============================================
+# COMPARAR CON EL REMOTO
+# ============================================
+# Situación: Quieres ver qué diferencia hay entre tu código local
+# y lo que hay en el remoto (después de hacer git fetch).
+git diff HEAD origin/main
+# → Lo que tu HEAD tiene diferente respecto a origin/main
+git diff origin/main HEAD
+# → Lo mismo pero desde la perspectiva opuesta
+
+
+# ============================================
+# LIMITAR A ARCHIVOS ESPECÍFICOS
+# ============================================
+
+# Solo un archivo:
+git diff -- archivo.txt
+git diff HEAD~3 -- src/auth.js
+
+# Un directorio:
+git diff -- src/
+
+# Múltiples archivos:
+git diff -- archivo1.txt archivo2.txt
+
+
+# ============================================
+# OPCIONES DE FORMATO DE SALIDA
+# ============================================
+
+# Solo los nombres de archivos que cambiaron:
 git diff --name-only
+git diff HEAD~1 --name-only
+
+# Nombres + estado (M=modificado, A=añadido, D=eliminado):
 git diff --name-status
+git diff main feature/login --name-status
 
-# Diff por palabras (útil para textos)
+# Estadística resumida (cuántas líneas añadidas/eliminadas):
+git diff --stat
+git diff HEAD~5 HEAD --stat
+
+# Estadística compacta (una línea por archivo):
+git diff --shortstat
+
+
+# ============================================
+# OPCIONES DE VISUALIZACIÓN MEJORADA
+# ============================================
+
+# Diff por palabras (útil para documentación, Markdown):
 git diff --word-diff
+# → Muestra qué palabras cambiaron, no qué líneas
 
-# Ignorar espacios
+# Diff por palabras con colores:
+git diff --word-diff=color
+
+# Ignorar cambios de espacios en blanco:
 git diff -w
+git diff --ignore-all-space
 
-# Detectar líneas movidas
+# Ignorar cambios al final de línea (espacios, tabs):
+git diff -b
+git diff --ignore-space-change
+
+# Detectar líneas que se movieron (util en refactorizaciones):
 git diff --color-moved
+git diff --color-moved=dimmed-zebra   # Con mejor visualización
+
+
+# ============================================
+# CAMBIAR EL ALGORITMO DE DIFF
+# ============================================
+
+# patience: mejor para código muy refactorizado
+git diff --diff-algorithm=patience
+
+# histogram: aún mejor para muchos cambios
+git diff --diff-algorithm=histogram
+```
+
+**Casos de uso reales:** [🔙](#4-git-diff---comparando-cambios)
+
+```bash
+# ─────────────────────────────────────────────────────────────────
+# CASO 1: Rutina antes de commitear
+# ─────────────────────────────────────────────────────────────────
+# Antes de cada commit, revisa qué vas a incluir:
+git diff           # Ver cambios NO stageados
+git add .          # Stagear
+git diff --staged  # Revisar exactamente qué va en el commit
+git commit -m "feat: descripción de lo que realmente hice"
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 2: Entender qué cambió en el remoto antes de hacer pull
+# ─────────────────────────────────────────────────────────────────
+git fetch origin
+git diff HEAD origin/main --stat
+# → Ver resumen de qué archivos cambiaron en el remoto
+git diff HEAD origin/main
+# → Ver el detalle del código
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 3: Ver qué introdujo un commit específico
+# ─────────────────────────────────────────────────────────────────
+# Ver qué cambió en el commit abc1234:
+git diff abc1234^ abc1234
+# ó más fácil:
+git show abc1234
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 4: Comparar tu feature con main para una PR
+# ─────────────────────────────────────────────────────────────────
+# Estás en feature/checkout. Quieres ver qué cambias respecto a main:
+git diff main...feature/checkout --stat
+# → Solo los cambios de tu feature (sin lo que main avanzó)
+git diff main...feature/checkout
+# → Todo el código que cambiaste en la feature
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 5: Encontrar cuándo se introdujo un cambio
+# ─────────────────────────────────────────────────────────────────
+# Ver la evolución de un archivo en los últimos 5 commits:
+git diff HEAD~5 HEAD -- src/config.js
+# → Todos los cambios en ese archivo desde 5 commits atrás
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 6: Documentación - diff por palabras
+# ─────────────────────────────────────────────────────────────────
+# Modificaste un README. El diff normal muestra líneas enteras.
+# Con --word-diff ves exactamente qué palabras cambiaron:
+git diff --word-diff README.md
+# Salida ejemplo:
+# ## Instalación
+# [-yarn install-]{+npm install+}   ← palabra "yarn" → "npm"
+```
+
+**Entendiendo la salida de git diff:** [🔙](#4-git-diff---comparando-cambios)
+
+```
+@@ -10,7 +10,8 @@     ← encabezado del hunk
+         contexto       ← líneas sin cambios (ayudan a orientarte)
+-  línea eliminada      ← esta línea se quitó (fondo rojo)
++  línea añadida        ← esta línea se añadió (fondo verde)
++  otra línea añadida
+         más contexto
+
+El encabezado "@@ -10,7 +10,8 @@" significa:
+  -10,7  → en el archivo ORIGINAL, empieza en línea 10 y muestra 7 líneas
+  +10,8  → en el archivo NUEVO, empieza en línea 10 y muestra 8 líneas
+           (8 en vez de 7 porque se añadió una línea)
 ```
 
 **Mejores prácticas:** [🔙](#4-git-diff---comparando-cambios)
 
 ```bash
-✓ Usa git diff antes de add
-✓ Usa git diff --staged antes de commit
-✓ Usa --word-diff para documentación
-✓ Usa ... (tres puntos) para comparar ramas
+✓ Haz git diff antes de git add (revisa qué vas a stagear)
+✓ Haz git diff --staged antes de git commit (revisa qué va en el commit)
+✓ Usa --name-only ó --stat para una visión rápida sin entrar en detalles
+✓ Usa --word-diff para comparar documentación o archivos de texto
+✓ Usa ... (tres puntos) al comparar ramas para ver solo los cambios de la feature
 
-✗ No ignores el diff antes de commitear
-✗ No confundas git diff con git diff --staged
+✗ No confundas git diff (unstaged) con git diff --staged (en el staging)
+✗ No uses git diff en vez de git show para ver qué introdujo un commit concreto
 ```
-
----
-
 
 ---
 
@@ -80,4 +275,3 @@ git diff --color-moved
 - [⬅️ Anterior: git status](03-git-status.md)
 - [🏠 Volver al Índice](../../GIT_COMANDOS_GUIA_PRACTICA.md)
 - [➡️ Siguiente: Referencias de Commits](04.1-referencias-commits.md)
-

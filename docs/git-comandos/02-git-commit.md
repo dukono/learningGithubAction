@@ -4,8 +4,11 @@
 
 ---
 
-## ¿Qué hace?
-Crea un snapshot inmutable del proyecto con los cambios del staging area.
+## 2. git commit - Guardando la Historia
+[⬆️ Top](#2-git-commit---guardando-la-historia)
+
+**¿Qué hace?**
+Crea un snapshot inmutable del proyecto con los cambios del staging area. Cada commit es un punto en la historia del proyecto al que siempre puedes volver.
 
 **Funcionamiento interno:** [🔙](#2-git-commit---guardando-la-historia)
 
@@ -149,79 +152,194 @@ git commit -p
 **Mensajes de commit efectivos (Conventional Commits):** [🔙](#2-git-commit---guardando-la-historia)
 
 ```bash
+# ─────────────────────────────────────────────────────────────────
+# ¿Por qué importa un buen mensaje de commit?
+# ─────────────────────────────────────────────────────────────────
+# En 6 meses, cuando algo falle en producción y hagas "git log",
+# el mensaje "fix" no te dice nada.
+# El mensaje "fix: corregir null pointer en checkout cuando el carrito está vacío"
+# te dice exactamente qué se hizo y por qué.
+#
+# Conventional Commits es un estándar muy extendido:
+# → Permite generar CHANGELOGs automáticamente
+# → Facilita decidir el número de versión (semver)
+# → Hace el historial legible por herramientas y personas
+
+# TIPOS PRINCIPALES:
+feat:     # Nueva funcionalidad para el usuario
+fix:      # Corrección de un bug
+docs:     # Cambios en documentación
+style:    # Formato, punto y coma... (sin cambios de lógica)
+refactor: # Cambio de código que no añade feature ni corrige bug
+test:     # Añadir o corregir tests
+chore:    # Tareas de mantenimiento (build, dependencias, CI...)
+perf:     # Mejora de rendimiento
+ci:       # Cambios en configuración de CI
+
+# FORMATO BÁSICO:
 feat: Add user authentication
 fix: Fix login validation bug
-docs: Update README
-style: Format code
-refactor: Simplify auth logic
-test: Add integration tests
-chore: Update dependencies
+docs: Update README with new API endpoints
 
-# Con scope:
-feat(auth): Add login endpoint
-fix(api): Handle timeout errors
+# CON SCOPE (qué módulo/área se ve afectado):
+feat(auth): Add JWT token refresh
+fix(api): Handle timeout errors in payment service
+docs(readme): Add installation instructions for Windows
 
-# Formato completo:
-feat(api): Add user registration
+# FORMATO COMPLETO (título + cuerpo + footer):
+feat(api): Add user registration endpoint
 
-- Implement POST /api/register
-- Add email validation
-- Add password hashing
+Implements POST /api/v1/register accepting email and password.
+Validates email format and password strength.
+Stores hashed password using bcrypt (cost factor 12).
 
 Closes #123
+Co-authored-by: Ana García <ana@empresa.com>
+
+# BREAKING CHANGE (cambio incompatible):
+feat(api)!: Change authentication to use OAuth2
+
+BREAKING CHANGE: The /api/auth endpoint now requires OAuth2 tokens.
+Basic auth credentials are no longer accepted.
+Migration guide: docs/migration-to-oauth2.md
+```
+
+**Casos de uso reales:** [🔙](#2-git-commit---guardando-la-historia)
+
+```bash
+# ─────────────────────────────────────────────────────────────────
+# CASO 1: Flujo de commit diario típico
+# ─────────────────────────────────────────────────────────────────
+# Pasaste la mañana implementando el formulario de registro.
+git status                          # Ver qué modificaste
+git diff                            # Revisar los cambios en detalle
+git add src/components/RegisterForm.js
+git add src/api/register.js
+git diff --staged                   # Confirmar qué entra en el commit
+git commit -m "feat(auth): add user registration form with email validation"
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 2: Corregir el último commit antes de hacer push
+# ─────────────────────────────────────────────────────────────────
+# Acabas de hacer commit y te das cuenta de que olvidaste un archivo.
+git add archivo-olvidado.js
+git commit --amend --no-edit        # Añade el archivo sin cambiar mensaje
+
+# O el mensaje tenía una errata:
+git commit --amend -m "feat(auth): add user registration form with email validation"
+
+# ⚠️ Solo usar --amend ANTES de hacer push
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 3: Commit al final del día con trabajo inacabado
+# ─────────────────────────────────────────────────────────────────
+# No acabaste la feature pero quieres guardar el progreso.
+# Opción A: Commit WIP (lo limpiarás mañana con rebase -i)
+git add .
+git commit -m "wip: login form half done - missing validation"
+
+# Opción B: Usar stash (no crea commit, más limpio)
+git stash push -m "WIP: login form - missing validation"
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 4: Commit con múltiples cambios lógicamente separados
+# ─────────────────────────────────────────────────────────────────
+# Modificaste 5 archivos pero los cambios son de dos features distintas.
+# Haces 2 commits separados usando git add -p:
+
+# Commit 1: Solo los cambios de la feature A
+git add -p                         # Selecciona los hunks de feature A
+git commit -m "feat: add product search by category"
+
+# Commit 2: Solo los cambios de la feature B
+git add .                          # Añade el resto
+git commit -m "fix: correct pagination calculation on product list"
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 5: Commit para pair programming (co-autoría)
+# ─────────────────────────────────────────────────────────────────
+git commit -m "feat: implement checkout flow
+
+Co-authored-by: María López <maria@empresa.com>"
+# → GitHub muestra ambos nombres como autores del commit
 ```
 
 **Troubleshooting común:** [🔙](#2-git-commit---guardando-la-historia)
 
 ```bash
-# Problema 1: "Nothing to commit"
-# Solución: Añade archivos al staging primero
-git add .
+# ─────────────────────────────────────────────────────────────────
+# Problema 1: "Nothing to commit, working tree clean"
+# ─────────────────────────────────────────────────────────────────
+# Causa: No has hecho git add de ningún cambio.
+git status       # Ver qué archivos tienes modificados
+git add .        # Añadir al staging
 git commit -m "Mensaje"
 
+
+# ─────────────────────────────────────────────────────────────────
 # Problema 2: Olvidaste añadir un archivo al commit
-# Solución: Usar --amend
+# ─────────────────────────────────────────────────────────────────
 git add archivo-olvidado.txt
-git commit --amend --no-edit
+git commit --amend --no-edit    # Añade al último commit sin cambiar mensaje
 
+
+# ─────────────────────────────────────────────────────────────────
 # Problema 3: Mensaje de commit equivocado
-# Solución: Usar --amend
+# ─────────────────────────────────────────────────────────────────
 git commit --amend -m "Mensaje correcto"
+# ⚠️ Solo si NO has hecho push todavía
 
-# Problema 4: Necesitas modificar el último commit
-# Solución: Ver ejemplos de --amend arriba
-git commit --amend
 
-# Problema 5: Commit en rama equivocada
-# Solución: Usar cherry-pick (ver sección de cherry-pick)
-# O usar reset para deshacer (ver sección de reset)
+# ─────────────────────────────────────────────────────────────────
+# Problema 4: Hice commit en la rama equivocada
+# ─────────────────────────────────────────────────────────────────
+# El commit está en main pero debería estar en feature/mi-tarea
 
-# Problema 6: "Please tell me who you are"
-# Solución: Configurar identidad
+# Paso 1: Ir a la rama correcta y traer el commit
+git checkout feature/mi-tarea
+git cherry-pick <hash-del-commit>   # Copia el commit a esta rama
+
+# Paso 2: Eliminar el commit de main
+git checkout main
+git reset --hard HEAD~1             # Elimina el último commit de main
+# ⚠️ Solo si main no estaba pusheado con ese commit
+
+
+# ─────────────────────────────────────────────────────────────────
+# Problema 5: "Please tell me who you are"
+# ─────────────────────────────────────────────────────────────────
 git config --global user.name "Tu Nombre"
 git config --global user.email "tu@email.com"
 
-# Problema 7: Editor no se abre o no sabes usar vi
-# Solución: Cambiar editor
-git config --global core.editor "nano"
-# O usar -m directamente:
-git commit -m "Mensaje"
 
-# Problema 8: Quieres deshacer un commit
-# Solución: Ver sección "git reset" o "git revert" según el caso
+# ─────────────────────────────────────────────────────────────────
+# Problema 6: El editor se abre y no sabes cerrarlo (vim)
+# ─────────────────────────────────────────────────────────────────
+# En vim: presiona Esc, luego escribe :wq y Enter (guarda y sale)
+# En vim: presiona Esc, luego escribe :q! y Enter (sale sin guardar = cancela commit)
+
+# Para cambiar el editor a algo más fácil:
+git config --global core.editor "nano"      # nano es más sencillo
+git config --global core.editor "code --wait"  # VS Code
 ```
 
 **Mejores prácticas:** [🔙](#2-git-commit---guardando-la-historia)
 
 ```bash
-✓ Commits pequeños y atómicos
-✓ Mensajes descriptivos (explica POR QUÉ)
-✓ Usa convenciones (Conventional Commits)
+✓ Commits pequeños y atómicos (un commit = un cambio lógico)
+✓ Mensajes que explican el POR QUÉ, no solo el QUÉ
+✓ Usa Conventional Commits (feat, fix, docs, refactor...)
 ✓ Usa --amend solo en commits NO pusheados
+✓ Revisa con git diff --staged antes de commitear
 
-✗ Evita commits gigantes
-✗ Evita mensajes genéricos ("fix", "update")
-✗ No uses --amend en commits públicos
+✗ Evita commits gigantes con 20 archivos mezclados
+✗ Evita mensajes vagos ("fix", "update", "cambios", "wip2")
+✗ No uses --amend en commits que ya están en ramas compartidas
+✗ No commitees archivos de configuración local, .env, node_modules
 ```
 
 ---

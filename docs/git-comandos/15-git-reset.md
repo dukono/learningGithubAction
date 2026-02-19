@@ -5,49 +5,120 @@
 ---
 
 ## 15. git reset - Moviendo Referencias
+[⬆️ Top](#15-git-reset---moviendo-referencias)
 
 **¿Qué hace?**
-Mueve HEAD y rama actual, opcionalmente modificando staging y working.
+Mueve el puntero HEAD y la rama actual a otro commit, con la opción de qué hacer con los cambios que "quedan atrás": conservarlos en staging, en working directory, o descartarlos.
 
-**Funcionamiento interno:**
+Es la herramienta para "deshacer" commits o preparaciones (git add) de forma local (antes de hacer push).
+
+**Funcionamiento interno:** [🔙](#15-git-reset---moviendo-referencias)
+
 ```
-Tres modos:
---soft:  Solo mueve HEAD/rama
---mixed: Mueve HEAD/rama + resetea staging
---hard:  Mueve HEAD/rama + resetea staging + working
+Situación: tienes estos commits y quieres deshacer el último:
+  A → B → C  (HEAD, main)
+
+git reset HEAD~1 → mueve main de C a B
+
+Los tres modos controlan qué pasa con los cambios de C:
+
+--soft:  A → B  (HEAD)    Los cambios de C: en STAGING
+--mixed: A → B  (HEAD)    Los cambios de C: en WORKING DIRECTORY
+--hard:  A → B  (HEAD)    Los cambios de C: ELIMINADOS (pérdida de datos)
+
+Internamente:
+1. Actualiza refs/heads/<rama> para que apunte al commit destino
+2. Según el modo:
+   --soft:  No toca index ni working
+   --mixed: Actualiza .git/index para que coincida con el nuevo HEAD
+   --hard:  Actualiza index Y working directory para coincidir con el nuevo HEAD
 ```
 
-**Uso práctico:**
+**Todas las opciones importantes:** [🔙](#15-git-reset---moviendo-referencias)
 
 ```bash
-# 1. Reset suave (mantiene cambios en staging)
+# ============================================
+# 1. --soft: deshacer commit, conservar cambios en STAGING
+# ============================================
+# Situación: Hiciste un commit pero quieres reescribir el mensaje
+# o añadir más archivos al mismo commit. Los cambios vuelven
+# al staging listos para ser comiteados de nuevo.
 git reset --soft HEAD~1
-# → Deshace commit
-# → Cambios vuelven a staging
-# → Útil para rehacer commit
+# → Commit deshecho
+# → Cambios vuelven a staging (como si hubieras hecho git add)
+# → Útil para: corregir mensaje, añadir archivos olvidados, combinar commits
 
-# 2. Reset mixto (default, cambios en working)
+
+# ============================================
+# 2. --mixed (DEFAULT): deshacer commit, cambios en WORKING DIRECTORY
+# ============================================
+# Situación: Hiciste un commit pero quieres revisar y reorganizar
+# qué exactamente commitear. Los cambios vuelven sin estar en staging,
+# para que tú decidas qué añadir y qué no.
 git reset HEAD~1
-# o: git reset --mixed HEAD~1
-# → Deshace commit
-# → Cambios vuelven a working directory
-# → Útil para reorganizar qué commitear
+# ó explícitamente:
+git reset --mixed HEAD~1
+# → Commit deshecho
+# → Cambios vuelven a working directory (NO en staging)
+# → Útil para: reorganizar un commit grande en varios más pequeños
 
-# 3. Reset duro (¡PIERDES CAMBIOS!)
+
+# ============================================
+# 3. --hard: deshacer commit Y ELIMINAR todos los cambios
+# ============================================
+# Situación: Quieres descartar COMPLETAMENTE el último commit y sus cambios.
+# O quieres sincronizar con el remoto descartando todo lo local.
 git reset --hard HEAD~1
-# → Deshace commit
-# → BORRA todos los cambios
-# → ⚠️ PELIGROSO: no recuperable sin reflog
+# → Commit deshecho
+# → TODOS los cambios de ese commit se PIERDEN
+# → Working directory y staging quedan limpios
+# ⚠️ PELIGROSO: no recuperable sin reflog
 
-# 4. Unstage archivo (quitar del staging)
+
+# ============================================
+# 4. Quitar archivo del staging (unstage)
+# ============================================
+# Situación: Hiciste "git add ." y accidentalmente incluiste un archivo
+# que no debería ir en el commit. Quieres quitarlo del staging
+# sin perder tus cambios en el archivo.
 git reset HEAD archivo.txt
-# → Mueve archivo de staging a working
-# → NO modifica el último commit
+# ó en Git moderno (equivalente):
+git restore --staged archivo.txt
+# → El archivo vuelve al working directory (sin staging)
+# → El archivo NO se modifica, solo sale del staging
 
-# 5. Reset a commit específico
-git reset --soft abc123
-git reset --mixed abc123
-git reset --hard abc123
+
+# ============================================
+# 5. Reset a commit específico (no solo el anterior)
+# ============================================
+# Situación: Quieres deshacer los últimos 3 commits.
+git reset --soft HEAD~3      # Los 3 commits → staging
+git reset HEAD~3             # Los 3 commits → working directory
+git reset --hard HEAD~3      # Los 3 commits → ELIMINADOS
+
+# Reset a un commit por su hash:
+git reset --soft abc1234
+git reset --hard abc1234
+
+
+# ============================================
+# 6. Sincronizar con el remoto (descartar todo lo local)
+# ============================================
+# Situación: Tu rama local y la remota divergieron.
+# Quieres que tu rama quede EXACTAMENTE como la remota,
+# descartando todos tus commits locales.
+git fetch origin
+git reset --hard origin/main
+# → Tu rama local queda idéntica al remoto
+# ⚠️ Perderás todos tus commits locales no pusheados
+
+
+# ============================================
+# 7. Unstage de directorio completo
+# ============================================
+git reset HEAD directorio/
+# → Quita todo el directorio del staging
+```
 
 # 6. Reset a remoto
 git reset --hard origin/main
@@ -57,7 +128,7 @@ git reset --hard origin/main
 git reset HEAD directorio/
 ```
 
-**FLUJO DE ESTADOS con reset:**
+**FLUJO DE ESTADOS con reset:** [🔙](#15-git-reset---moviendo-referencias)
 
 ```bash
 # ESTADOS EN GIT:
@@ -75,7 +146,7 @@ git reset HEAD directorio/
 # Commit → (borrado):  git reset --hard HEAD~1 (PELIGRO)
 ```
 
-**Casos de uso prácticos:**
+**Casos de uso prácticos:** [🔙](#15-git-reset---moviendo-referencias)
 
 ```bash
 # Caso 1: Quitar un archivo del último commit
@@ -108,7 +179,7 @@ git reset --soft HEAD~3     # Deshace 3 commits → staging
 git commit -m "Squashed commit"  # Un solo commit
 ```
 
-**Comparación de modos:**
+**Comparación de modos:** [🔙](#15-git-reset---moviendo-referencias)
 
 ```bash
 git reset --soft HEAD~1
@@ -128,7 +199,7 @@ git reset --hard HEAD~1
 → ¡CAMBIOS PERDIDOS!
 ```
 
-**Reset vs Revert:**
+**Reset vs Revert:** [🔙](#15-git-reset---moviendo-referencias)
 
 ```bash
 RESET (reescribe historia):
@@ -142,7 +213,7 @@ REVERT (preserva historia):
 → Seguro para commits públicos
 ```
 
-**Recuperación:**
+**Recuperación:** [🔙](#15-git-reset---moviendo-referencias)
 
 ```bash
 # Si hiciste reset por error:
@@ -150,7 +221,7 @@ git reflog
 git reset --hard HEAD@{1}
 ```
 
-**Troubleshooting común:**
+**Troubleshooting común:** [🔙](#15-git-reset---moviendo-referencias)
 
 ```bash
 # Problema 1: Hice reset --hard por error
@@ -180,7 +251,7 @@ git reset --hard HEAD@{1}   # Vuelve al estado anterior
 # Usa git revert en su lugar (ver sección de revert)
 ```
 
-**Mejores prácticas:**
+**Mejores prácticas:** [🔙](#15-git-reset---moviendo-referencias)
 
 ```bash
 ✓ Usa --soft para reorganizar commits
