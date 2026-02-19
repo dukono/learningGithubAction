@@ -6,6 +6,8 @@
 
 ## 📚 Tabla de Contenidos
 
+### CONFIGURACIÓN
+0. [git config - Configuración de Git](docs/git-comandos/00-git-config.md)
 
 ### COMANDOS BÁSICOS ESENCIALES
 1. [git add - Preparando Cambios](docs/git-comandos/01-git-add.md)
