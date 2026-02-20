@@ -168,6 +168,57 @@ git diff --color-moved=dimmed-zebra   # Con mejor visualización
 
 
 # ============================================
+# --diff-filter: FILTRAR POR ESTADO DEL ARCHIVO
+# ============================================
+# Situación: No quieres ver TODOS los archivos que cambiaron,
+# sino solo los que tienen un estado concreto (solo añadidos,
+# solo eliminados, solo los que tienen conflicto, etc.)
+#
+# Cada letra representa un estado:
+#   A  → Added          (archivo nuevo que se añadió)
+#   M  → Modified       (archivo existente que se modificó)
+#   D  → Deleted        (archivo que se eliminó)
+#   R  → Renamed        (archivo que se renombró)
+#   C  → Copied         (archivo que se copió)
+#   U  → Unmerged       (archivo con conflicto sin resolver)
+#   T  → Type changed   (cambió de tipo: ej. archivo normal → symlink)
+#   B  → Broken pair    (par rename/copy roto)
+#   X  → Unknown        (estado desconocido)
+#
+# Minúscula = excluir ese tipo (invertir el filtro)
+
+# Solo archivos añadidos:
+git diff --name-only --diff-filter=A
+git diff --name-only --diff-filter=A HEAD~1
+
+# Solo archivos eliminados:
+git diff --name-only --diff-filter=D
+
+# Solo archivos modificados:
+git diff --name-only --diff-filter=M
+
+# Solo archivos renombrados:
+git diff --name-only --diff-filter=R
+
+# Solo archivos con conflicto (durante un merge):
+git diff --name-only --diff-filter=U
+# → El uso más frecuente: ver qué archivos siguen sin resolver
+
+# Combinar varios estados (añadidos O modificados):
+git diff --name-only --diff-filter=AM
+
+# Excluir eliminados (todos menos los borrados):
+git diff --name-only --diff-filter=d   # minúscula = excluir
+
+# Con --name-status (ver la letra de estado junto al nombre):
+git diff --name-status --diff-filter=AMR HEAD~3
+# Salida ejemplo:
+# A  src/nuevo-componente.js    ← añadido
+# M  src/auth.js                ← modificado
+# R  src/utils.js → src/helpers.js  ← renombrado
+
+
+# ============================================
 # CAMBIAR EL ALGORITMO DE DIFF
 # ============================================
 
@@ -237,6 +288,20 @@ git diff --word-diff README.md
 # Salida ejemplo:
 # ## Instalación
 # [-yarn install-]{+npm install+}   ← palabra "yarn" → "npm"
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 7: Ver solo los archivos de un tipo de cambio concreto
+# ─────────────────────────────────────────────────────────────────
+# Hiciste una refactorización grande: renombraste archivos, añadiste
+# otros y eliminaste algunos. Quieres ver solo los eliminados para
+# asegurarte de que no borraste nada importante por error.
+git diff HEAD~1 --name-only --diff-filter=D
+# → Solo muestra los archivos que se eliminaron en el último commit
+
+# O durante un merge con conflictos, saber cuáles faltan por resolver:
+git diff --name-only --diff-filter=U
+# → Lista SOLO los archivos que aún tienen conflictos sin resolver
 ```
 
 **Entendiendo la salida de git diff:** [🔙](#4-git-diff---comparando-cambios)

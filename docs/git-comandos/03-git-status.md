@@ -186,15 +186,63 @@ git branch backup-antes-de-sincronizar
 # Luego puedes probar diferentes estrategias
 ```
 
+**Casos de uso reales:** [🔙](#3-git-status---inspeccionando-el-estado)
+
+```bash
+# ─────────────────────────────────────────────────────────────────
+# CASO 1: Rutina antes de commitear
+# ─────────────────────────────────────────────────────────────────
+# Antes de cada commit, siempre deberías saber en qué estado estás:
+git status               # Estado completo
+git status -s            # Visión rápida de qué cambió
+git diff --staged        # Ver exactamente qué va en el commit
+git commit -m "..."
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 2: Empezar el día - sincronizarse con el equipo
+# ─────────────────────────────────────────────────────────────────
+git fetch origin         # Descarga cambios sin integrarlos
+git status               # Ver si estás ahead/behind/diverged
+# Si dice "behind": git pull
+# Si dice "ahead": git push
+# Si dice "diverged": decidir estrategia (ver sección divergencia)
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 3: Antes de cambiar de rama
+# ─────────────────────────────────────────────────────────────────
+# Siempre verifica el estado antes de cambiar de rama para
+# no llevarte cambios accidentalmente a otro contexto.
+git status               # ¿Tengo cambios pendientes?
+# Si hay cambios: git stash ó git commit -m "wip"
+git switch otra-rama
+
+
+# ─────────────────────────────────────────────────────────────────
+# CASO 4: Diagnóstico rápido en terminal con -s -b
+# ─────────────────────────────────────────────────────────────────
+git status -sb
+# Salida ejemplo:
+# ## feature/login...origin/feature/login [ahead 2, behind 1]
+#  M src/auth.js        ← modificado sin stagear
+# MM src/config.js      ← staged + modificado de nuevo
+# A  src/new-helper.js  ← nuevo archivo staged
+# ?? test.log           ← archivo nuevo no tracked
+```
+
 **Mejores prácticas:** [🔙](#3-git-status---inspeccionando-el-estado)
 
 ```bash
-✓ Ejecuta git status antes de commit (SIEMPRE)
-✓ Usa -s para overview rápido
-✓ Verifica tracking branch con -b
+✓ Ejecuta git status SIEMPRE antes de commitear
+✓ Usa -s para overview rápido cuando ya sabes lo que tienes
+✓ Usa -sb para ver también la info de ahead/behind
+✓ Haz git fetch + git status al inicio del día para ver si debes sincronizar
+✓ Antes de cambiar de rama, verifica que no tienes cambios pendientes inesperados
 
-✗ No ignores el output
-✗ No commitees sin revisar status primero
+✗ No ignores el output de git status (el "ahead/behind" tiene información clave)
+✗ No commitees sin haber visto git status + git diff --staged
+✗ No confundas "Changes to be committed" (staged) con "Changes not staged" (working)
 ```
 
 ---

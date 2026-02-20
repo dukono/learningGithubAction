@@ -171,31 +171,45 @@ git merge -X ours feature-x
 git merge -X theirs feature-x
 
 
-# 8. -s recursive -X patience → Algoritmo más inteligente para conflictos
+# 8. -X diff-algorithm → Cambiar el algoritmo de detección de diferencias
 # ─────────────────────────────────────────────
 # Situación: Haces un merge y Git te reporta muchos conflictos,
 # pero cuando los abres, en realidad el código es casi idéntico.
-# Esto pasa porque el algoritmo por defecto de Git (myers) es rápido
-# pero no muy "listo" para detectar qué cambió realmente.
+# Esto pasa porque el algoritmo por defecto (myers) es rápido
+# pero no muy "listo" para detectar qué cambió realmente en archivos
+# con muchos bloques de código similares (llaves, corchetes repetidos...).
 #
-# El algoritmo "patience" analiza el código con más cuidado y
-# frecuentemente encuentra menos conflictos falsos en archivos
-# grandes o con muchos bloques de código similares.
+# Cambiar el algoritmo le permite a Git detectar mejor qué líneas
+# realmente cambiaron, generando menos conflictos falsos.
 #
-# Ejemplo real: Archivos de configuración XML o JSON largos donde
-# el algoritmo por defecto se confunde con llaves y corchetes repetidos.
-git merge -s recursive -X patience feature-x
+# SINTAXIS: siempre se usa -X diff-algorithm=<nombre>
 
-# Otros algoritmos disponibles (de menor a mayor precisión/velocidad):
-# myers     → Por defecto. El más rápido.
-# minimal   → Intenta producir el diff más pequeño posible.
-# patience  → Más cuidadoso. Menos conflictos falsos.
-# histogram → Evolución de patience. Generalmente el más preciso.
-git merge -s recursive -X diff-algorithm=histogram feature-x
+# myers (por defecto, el más rápido):
+git merge feature-x
+# → No hace falta especificarlo, es el comportamiento por defecto
+
+# patience (más cuidadoso, menos conflictos falsos):
+# → Útil en archivos grandes con muchos bloques de código parecidos
+# → Ejemplo: archivos XML o JSON largos con muchas llaves/corchetes
+git merge -X diff-algorithm=patience feature-x
+
+# histogram (el más preciso, evolución de patience):
+# → Generalmente el mejor para código fuente con muchas repeticiones
+git merge -X diff-algorithm=histogram feature-x
+
+# minimal (intenta producir el diff más pequeño posible):
+git merge -X diff-algorithm=minimal feature-x
+
+# Resumen de menor a mayor precisión (y menor a mayor coste):
+#   myers < minimal < patience < histogram
 
 
-# 9. -s recursive -X ignore-space-change → Ignorar cambios de espacios
+# 9. -X ignore-space-change → Ignorar cambios de espacios en blanco
 # ─────────────────────────────────────────────
+# ⚠️ NOTA: Esta opción NO es un algoritmo de diff.
+# Es una opción independiente que controla cómo se tratan
+# los espacios en blanco al comparar líneas durante el merge.
+#
 # Situación: Tu compañero reformateó un archivo (cambió indentación,
 # añadió espacios, etc.) pero no cambió la lógica. Al hacer merge,
 # Git detecta conflictos en todas esas líneas aunque el código sea
@@ -203,23 +217,34 @@ git merge -s recursive -X diff-algorithm=histogram feature-x
 #
 # Con esta opción, Git ignora esos cambios de espacios al comparar
 # y solo marca conflicto cuando la lógica real es diferente.
-git merge -s recursive -X ignore-space-change feature-x
+git merge -X ignore-space-change feature-x
 
-# Variantes:
-# ignore-all-space    → Ignora TODOS los espacios (más agresivo)
-# ignore-space-at-eol → Solo ignora espacios al final de línea
+# Variantes disponibles (de menor a mayor agresividad):
+# ignore-space-at-eol   → Solo ignora espacios al FINAL de cada línea
+# ignore-space-change   → Ignora cambios en cantidad de espacios intermedios
+# ignore-all-space      → Ignora TODOS los espacios en blanco (más agresivo)
+
+git merge -X ignore-space-at-eol feature-x
+git merge -X ignore-space-change feature-x
+git merge -X ignore-all-space feature-x
+
+# Se pueden combinar con un algoritmo específico:
+git merge -X diff-algorithm=patience -X ignore-space-change feature-x
 
 
-# 10. -s recursive -X renormalize → Ignorar conflictos de saltos de línea
+# 10. -X renormalize → Normalizar saltos de línea antes de comparar
 # ─────────────────────────────────────────────
+# ⚠️ NOTA: Esta opción tampoco es un algoritmo de diff.
+# Es una opción de normalización que se aplica antes de la comparación.
+#
 # Situación: En equipos mixtos (Windows + Linux/Mac), los archivos
 # a veces tienen diferentes tipos de salto de línea: Windows usa CRLF (\r\n)
 # y Linux/Mac usa LF (\n). Al hacer merge entre ramas de distintos sistemas,
 # Git puede ver conflictos en cada línea del archivo aunque nadie cambió nada.
 #
 # Con renormalize, Git normaliza los saltos de línea antes de comparar,
-# evitando esos conflictos falsos.
-git merge -s recursive -X renormalize feature-x
+# evitando esos conflictos falsos causados solo por diferencias de plataforma.
+git merge -X renormalize feature-x
 
 
 # 11. Merge de múltiples ramas a la vez (Octopus merge)
@@ -384,6 +409,22 @@ git status
 
 # Ver solo la lista de archivos en conflicto (más limpio)
 git diff --name-only --diff-filter=U
+# --diff-filter filtra el output de git diff según el ESTADO de cada archivo.
+# El valor "U" significa "Unmerged" (sin resolver).
+# → Muestra SOLO los archivos que tienen conflictos pendientes de resolver,
+#   sin el ruido de los demás archivos ya resueltos.
+#
+# Otros valores útiles de --diff-filter durante un merge:
+#   U  → Unmerged       (conflictos sin resolver) ← el más útil aquí
+#   M  → Modified       (modificados en ambas ramas, sin conflicto)
+#   A  → Added          (añadidos por la rama entrante)
+#   D  → Deleted        (eliminados por la rama entrante)
+#
+# Se pueden combinar varios valores:
+git diff --name-only --diff-filter=UM   # Conflictos + modificados
+#
+# Para una referencia completa de --diff-filter con todos sus valores,
+# ver: [04-git-diff.md → sección --diff-filter](04-git-diff.md)
 
 # Ver el detalle de qué líneas están en conflicto
 git diff
