@@ -2,7 +2,7 @@
 
 # Script para regenerar los workflows vacíos
 
-echo "1 Regenerando workflows..."
+echo "Regenerando workflows..."
 
 # 07 - Secrets and Security
 cat > .github/workflows/07-secrets-security.yml << 'ENDOFFILE'
