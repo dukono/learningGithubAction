@@ -4,7 +4,8 @@ def procesar_usuario(datos):
     return True
 
 def procesar_pedido(datos):
-    validar(datos)
+    validar_2(datos)
+    guardar(datos)
     return True
 
 
