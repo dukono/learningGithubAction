@@ -1,5 +1,5 @@
 def procesar_usuario(datos):
-    log.info("procesando pedido")
+    log.info("procesando user")
     validar(datos)
     guardar(datos)
     return True
