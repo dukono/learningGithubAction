@@ -9,4 +9,4 @@ def procesar_pedido(datos):
     return True
 
 
-//log.info("procesando rebase")
+//log.info("procesando rebase y en main")
