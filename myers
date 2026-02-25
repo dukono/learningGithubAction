@@ -1,10 +1,10 @@
 def procesar_usuario(datos):
-    validar(datos)
+    validar_v2(datos)
     guardar(datos)
     return True
 
 def procesar_pedido(datos):
-    validar_2(datos)
+    validar(datos)
     guardar(datos)
     return True
 
