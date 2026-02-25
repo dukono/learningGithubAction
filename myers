@@ -1,0 +1,12 @@
+def procesar_usuario(datos):
+    validar(datos)
+    guardar(datos)
+    return True
+
+def procesar_pedido(datos):
+    validar(datos)
+    guardar(datos)
+    return True
+
+
+//log.info("procesando pedido")
