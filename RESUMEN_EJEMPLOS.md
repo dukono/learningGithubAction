@@ -1,6 +1,7 @@
 # 🎉 Resumen de Ejemplos Avanzados Creados
 
 ## ✅ Lo que se ha creado
+para rebase
 
 He generado un conjunto completo de **ejemplos avanzados y ejecutables** que demuestran **TODAS las capacidades** de GitHub Actions en la práctica.
 

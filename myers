@@ -8,4 +8,4 @@ def procesar_pedido(datos):
     guardar(datos)
     return True
 
-//log.info("for rebase 2 commit")
+//log.info("for squash 1 commit")
