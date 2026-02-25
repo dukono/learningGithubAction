@@ -1,6 +1,6 @@
 def procesar_usuario(datos):
     validar_v2(datos)
-    guardar(datos)
+    guardar_v2(datos)
     return True
 
 def procesar_pedido(datos):
