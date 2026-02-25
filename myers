@@ -4,9 +4,7 @@ def procesar_usuario(datos):
     return True
 
 def procesar_pedido(datos):
-    log.info("procesando pedido")
     validar(datos)
-    guardar(datos)
     return True
 
 
