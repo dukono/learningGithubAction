@@ -7,6 +7,4 @@ def procesar_pedido(datos):
     validar(datos)
     guardar(datos)
     return True
-
-//log.info("procesando rebase en main")
-//log.info("procesando rebase y en main 2 ficheros")
+//log.info("procesando rebase y en main 2 files")
