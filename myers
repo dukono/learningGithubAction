@@ -9,4 +9,4 @@ def procesar_pedido(datos):
     return True
 
 
-//log.info("procesando pedido")
+//log.info("procesando usuario")
