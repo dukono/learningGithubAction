@@ -3,4 +3,4 @@
 # Script para regenerar los workflows vacíos
 
 echo "Regenerando workflows..."
-para hacer rebase
+para hacer merge con main
