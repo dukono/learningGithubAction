@@ -9,11 +9,5 @@ new with name 22
 for merge testing0
 line before testing0
 
-<<<<<<< HEAD
-nothing 10
-
-
 para merge con main commit 2
-=======
-nothing 10
->>>>>>> 54a13c656d5351082de6e4bc34eeba87666ec116
+
