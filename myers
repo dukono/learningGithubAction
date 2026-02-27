@@ -8,4 +8,4 @@ def procesar_pedido(datos):
     guardar(datos)
     return True
 
-//log.info("para merge 1er commit")
+//log.info("para rename 1")
