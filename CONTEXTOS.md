@@ -1,7 +1,8 @@
-# 🎭 GitHub Actions: Contextos y Variables Completas
+# GitHub Actions: Contextos y Variables Completas
 
-## 📚 Índice
+## Índice
 1. [Contexto `github`](#contexto-github)
+   - [Eventos Específicos por Trigger](#eventos-específicos)
 2. [Contexto `env`](#contexto-env)
 3. [Contexto `job`](#contexto-job)
 4. [Contexto `steps`](#contexto-steps)
@@ -11,61 +12,67 @@
 8. [Contexto `strategy` y `matrix`](#contexto-strategy-y-matrix)
 9. [Contexto `needs`](#contexto-needs)
 10. [Contexto `inputs`](#contexto-inputs)
-11. [Funciones de Contexto](#funciones-de-contexto)
+11. [Arrays en el Contexto: labels, assignees y similares](#arrays-en-el-contexto-labels-assignees-y-similares)
+12. [Funciones de Contexto](#funciones-de-contexto)
+13. [Tabla de Referencia Rápida](#tabla-de-referencia-rápida)
 
 ---
 
-## 📦 Contexto `github`
+## Contexto `github`
 
 ### Propiedades Generales
 
-```yaml
-github.action              # Nombre de la acción actual
-github.action_path         # Path donde está la acción
-github.action_ref          # Ref de la acción (usuario/repo@ref)
-github.action_repository   # Repositorio de la acción
-github.action_status       # Estado de la acción (success, failure, cancelled)
-github.actor               # Usuario que disparó el workflow
-github.actor_id            # ID numérico del usuario
-github.api_url             # https://api.github.com
-github.base_ref            # Rama base del PR
-github.env                 # Path al archivo de variables de entorno
-github.event               # Payload completo del evento
-github.event_name          # Tipo de evento (push, pull_request, etc.)
-github.event_path          # Path al archivo JSON del evento
-github.graphql_url         # https://api.github.com/graphql
-github.head_ref            # Rama del PR
-github.job                 # ID del job actual
-github.job_workflow_sha    # SHA del workflow job
-github.output              # Path al archivo de outputs
-github.path                # Path al archivo de PATH
-github.ref                 # refs/heads/main o refs/tags/v1.0.0
-github.ref_name            # main o v1.0.0
-github.ref_protected       # true si la rama está protegida
-github.ref_type            # branch o tag
-github.repository          # owner/repo
-github.repository_id       # ID numérico del repositorio
-github.repository_owner    # owner
-github.repository_owner_id # ID numérico del owner
-github.repositoryUrl       # git://github.com/owner/repo.git
-github.retention_days      # Días de retención de artifacts
-github.run_id              # ID único del workflow run
-github.run_number          # Número secuencial del run
-github.run_attempt         # Número de intento (para re-runs)
-github.secret_source       # Actions, Dependabot, etc.
-github.server_url          # https://github.com
-github.sha                 # SHA del commit
-github.token               # Token automático (si está disponible)
-github.triggering_actor    # Usuario que disparó (puede diferir de actor)
-github.workflow            # Nombre del workflow
-github.workflow_ref        # Referencia del workflow
-github.workflow_sha        # SHA del workflow
-github.workspace           # Path del workspace
-```
+| Propiedad | Descripción | Disponible en |
+|---|---|---|
+| `github.action` | ID del step actual o de la action en ejecución | Siempre |
+| `github.action_path` | Path donde está instalada la action actual | Solo en steps de tipo `uses:` |
+| `github.action_ref` | Ref de la action (ej: `v4`) | Solo en steps de tipo `uses:` |
+| `github.action_repository` | Repositorio de la action (ej: `actions/checkout`) | Solo en steps de tipo `uses:` |
+| `github.action_status` | Estado de la action actual | Siempre |
+| `github.actor` | Usuario que disparó el workflow | Siempre |
+| `github.actor_id` | ID numérico del usuario que disparó el workflow | Siempre |
+| `github.api_url` | URL de la API REST de GitHub (`https://api.github.com`) | Siempre |
+| `github.base_ref` | Nombre de la rama destino del PR (sin `refs/heads/`) | ⚠️ Solo en `pull_request` |
+| `github.env` | Path al archivo `$GITHUB_ENV` en el runner | Siempre |
+| `github.event` | Payload completo del evento en formato JSON | Siempre |
+| `github.event_name` | Nombre del evento que disparó el workflow (`push`, `pull_request`, etc.) | Siempre |
+| `github.event_path` | Path al archivo JSON del payload del evento en el runner | Siempre |
+| `github.graphql_url` | URL de la API GraphQL (`https://api.github.com/graphql`) | Siempre |
+| `github.head_ref` | Nombre de la rama origen del PR (sin `refs/heads/`) | ⚠️ Solo en `pull_request` |
+| `github.job` | ID del job actual (el `id` definido en el YAML) | Siempre |
+| `github.job_workflow_sha` | SHA del archivo del workflow para el job actual | Siempre |
+| `github.output` | Path al archivo `$GITHUB_OUTPUT` en el runner | Siempre |
+| `github.path` | Path al archivo `$GITHUB_PATH` en el runner | Siempre |
+| `github.ref` | Ref completa que disparó el evento (`refs/heads/main`, `refs/pull/11/merge`) | Siempre |
+| `github.ref_name` | Nombre corto de la rama o tag (`main`, `v1.0.0`) | Siempre |
+| `github.ref_protected` | `true` si la rama está protegida en GitHub | Siempre |
+| `github.ref_type` | Tipo de ref: `branch` o `tag` | Siempre |
+| `github.repository` | Nombre completo del repo (`owner/repo`) | Siempre |
+| `github.repository_id` | ID numérico del repositorio | Siempre |
+| `github.repository_owner` | Propietario del repositorio (`owner`) | Siempre |
+| `github.repository_owner_id` | ID numérico del propietario | Siempre |
+| `github.repositoryUrl` | URL git del repo (`git://github.com/owner/repo.git`) | Siempre |
+| `github.retention_days` | Días de retención de artifacts y logs | Siempre |
+| `github.run_id` | ID único global de la ejecución del workflow | Siempre |
+| `github.run_number` | Número secuencial de ejecuciones del workflow en el repo | Siempre |
+| `github.run_attempt` | Número de reintento de la ejecución (1 si no se reintentó) | Siempre |
+| `github.secret_source` | Origen de los secretos (`Actions`, `Dependabot`, etc.) | Siempre |
+| `github.server_url` | URL del servidor GitHub (`https://github.com`) | Siempre |
+| `github.sha` | SHA completo del commit que disparó el evento | Siempre |
+| `github.token` | Token de autenticación automático (equivale a `secrets.GITHUB_TOKEN`) | Siempre |
+| `github.triggering_actor` | Usuario que disparó la ejecución (puede diferir de `actor` en re-runs) | Siempre |
+| `github.workflow` | Nombre del workflow (campo `name:` del YAML) | Siempre |
+| `github.workflow_ref` | Ref completa del archivo del workflow | Siempre |
+| `github.workflow_sha` | SHA del archivo del workflow | Siempre |
+| `github.workspace` | Path absoluto del directorio de trabajo en el runner (donde `actions/checkout` clona el repo) | Siempre |
+
+> **`github.actor` vs `github.triggering_actor`**: Normalmente son iguales. Difieren cuando se hace un **re-run**: `actor` es quien hizo el push/PR original, `triggering_actor` es quien pulsó "Re-run jobs".
+
+> **`github.ref` en `pull_request`**: No es `refs/heads/feature2` sino `refs/pull/11/merge`, una referencia virtual que GitHub crea automáticamente representando el merge hipotético del PR. Por eso `github.head_ref` y `github.base_ref` existen: para tener los nombres reales de las ramas del PR.
 
 ---
 
-## 🔄 Eventos Específicos
+## Eventos Específicos
 
 ### Evento: `pull_request` / `pull_request_target`
 
@@ -180,41 +187,44 @@ jobs:
 
 ### Evento: `push`
 
+| Campo | Descripción | Ejemplo |
+|---|---|---|
+| `github.event.after` | SHA del commit **después** del push (el nuevo HEAD de la rama) | `9cf3dea...` |
+| `github.event.before` | SHA del commit **antes** del push (el HEAD anterior) | `83108f7...` |
+| `github.event.compare` | URL para comparar los cambios en GitHub | `https://github.com/owner/repo/compare/before...after` |
+| `github.event.created` | `true` si el push **creó** una nueva rama o tag | `true` / `false` |
+| `github.event.deleted` | `true` si el push **eliminó** una rama o tag | `true` / `false` |
+| `github.event.forced` | `true` si fue un **force push** (`git push --force`) | `true` / `false` |
+| `github.event.ref` | Ref completa que recibió el push (`refs/heads/main`) | `refs/heads/main` |
+| `github.event.pusher.name` | Nombre del usuario que hizo el push | `dukono` |
+| `github.event.pusher.email` | Email del usuario que hizo el push | `dukono@example.com` |
+
+> ⚠️ **`github.event.before` y `github.event.after` solo existen en eventos `push`**. En `pull_request` están vacíos. Para un PR usa `github.event.pull_request.base.sha` y `github.event.pull_request.head.sha`.
+
+**Commits del push:**
+
 ```yaml
-github.event.after                                     # SHA después del push
-github.event.before                                    # SHA antes del push
-github.event.compare                                   # URL para comparar
-github.event.created                                   # true si es creación de rama/tag
-github.event.deleted                                   # true si es eliminación
-github.event.forced                                    # true si es force push
-github.event.ref                                       # refs/heads/main
+github.event.commits                    # Array con todos los commits del push
+github.event.commits[0].id             # SHA del commit
+github.event.commits[0].message        # Mensaje del commit
+github.event.commits[0].timestamp      # ISO 8601
+github.event.commits[0].author.name    # Nombre del autor
+github.event.commits[0].author.email   # Email del autor
+github.event.commits[0].author.username # GitHub username del autor
+github.event.commits[0].url            # URL del commit en GitHub
+github.event.commits[0].distinct       # true si es un commit único (no ya en el repo)
+github.event.commits[0].added          # Array de archivos añadidos
+github.event.commits[0].modified       # Array de archivos modificados
+github.event.commits[0].removed        # Array de archivos eliminados
 
-# Commits
-github.event.commits                                   # Array de commits
-github.event.commits[0].id                            # SHA del commit
-github.event.commits[0].message                       # Mensaje
-github.event.commits[0].timestamp                     # ISO 8601
-github.event.commits[0].author.name                   # Nombre del autor
-github.event.commits[0].author.email                  # Email
-github.event.commits[0].author.username               # GitHub username
-github.event.commits[0].url                           # URL del commit
-github.event.commits[0].distinct                      # true si es único
-github.event.commits[0].added                         # Archivos añadidos
-github.event.commits[0].modified                      # Archivos modificados
-github.event.commits[0].removed                       # Archivos eliminados
-
-# Head commit (último commit)
-github.event.head_commit.id                           # SHA
-github.event.head_commit.message                      # Mensaje
-github.event.head_commit.timestamp                    # ISO 8601
-github.event.head_commit.author.name                  # Nombre
-github.event.head_commit.author.email                 # Email
-github.event.head_commit.committer.name               # Quien commitó
-github.event.head_commit.committer.email              # Email del committer
-
-# Pusher
-github.event.pusher.name                              # Quien hizo push
-github.event.pusher.email                             # Email
+# Head commit (último commit del push)
+github.event.head_commit.id            # SHA del último commit
+github.event.head_commit.message       # Mensaje del último commit
+github.event.head_commit.timestamp     # ISO 8601
+github.event.head_commit.author.name   # Nombre del autor
+github.event.head_commit.author.email  # Email del autor
+github.event.head_commit.committer.name  # Nombre del committer
+github.event.head_commit.committer.email # Email del committer
 ```
 
 ### Evento: `issues`
@@ -307,7 +317,7 @@ github.event.schedule                                  # Expresión cron que dis
 
 ---
 
-## 🌍 Contexto `env`
+## Contexto `env`
 
 Variables de entorno definidas en el workflow.
 
@@ -353,7 +363,7 @@ run: |
 
 ---
 
-## 🏃 Contexto `runner`
+## Contexto `runner`
 
 Información sobre el runner (máquina que ejecuta el workflow).
 
@@ -388,7 +398,7 @@ runner.debug               # '1' si debug está habilitado
 
 ---
 
-## 📤 Contexto `steps`
+## Contexto `steps`
 
 Outputs de steps anteriores.
 
@@ -397,6 +407,27 @@ steps.<step_id>.outputs.<output_name>
 steps.<step_id>.outcome                # success, failure, cancelled, skipped
 steps.<step_id>.conclusion             # success, failure, cancelled, skipped
 ```
+
+> ⚠️ **`steps.<id>.outputs` solo funciona si guardas el valor en `$GITHUB_OUTPUT`**, NO en `$GITHUB_ENV`.
+>
+> | Mecanismo | Cómo acceder | Requiere `id` |
+> |---|---|---|
+> | `echo "key=val" >> $GITHUB_OUTPUT` | `${{ steps.<id>.outputs.key }}` | ✅ Sí |
+> | `echo "key=val" >> $GITHUB_ENV` | `$key` (variable bash) | ❌ No |
+>
+> ```yaml
+> # ✅ Accesible con steps.<id>.outputs.ref
+> echo "ref=${{ github.ref }}" >> $GITHUB_OUTPUT
+>
+> # ❌ NO accesible con steps.<id>.outputs.ref (solo como $ref en bash)
+> echo "ref=${{ github.ref }}" >> $GITHUB_ENV
+> ```
+>
+> Si necesitas acceder al valor **tanto** con `steps.<id>.outputs` como con `$VAR` en bash, escribe en ambos archivos:
+> ```yaml
+> echo "ref=${{ github.ref }}" >> $GITHUB_OUTPUT   # para steps.getter.outputs.ref
+> echo "ref=${{ github.ref }}" >> $GITHUB_ENV       # para $ref en bash
+> ```
 
 **Ejemplo:**
 
@@ -423,7 +454,7 @@ steps:
 
 ---
 
-## 💼 Contexto `job`
+## Contexto `job`
 
 Información sobre el job actual.
 
@@ -448,7 +479,7 @@ job.status                 # success, failure, cancelled
 
 ---
 
-## 🔐 Contexto `secrets`
+## Contexto `secrets`
 
 Secretos encriptados configurados en GitHub.
 
@@ -477,7 +508,7 @@ secrets.INHERITED_SECRET   # Secretos de la organización
 
 ---
 
-## 🔧 Contexto `vars`
+## Contexto `vars`
 
 Variables de configuración (no encriptadas).
 
@@ -492,7 +523,7 @@ vars.ORG_VAR              # Variables de organización
 
 ---
 
-## 📊 Contexto `strategy` y `matrix`
+## Contexto `strategy` y `matrix`
 
 Para jobs con matrices.
 
@@ -528,7 +559,7 @@ steps:
 
 ---
 
-## 🔗 Contexto `needs`
+## Contexto `needs`
 
 Outputs de jobs dependientes.
 
@@ -565,7 +596,7 @@ jobs:
 
 ---
 
-## 📥 Contexto `inputs`
+## Contexto `inputs`
 
 Inputs de workflows reutilizables o manuales.
 
@@ -621,7 +652,150 @@ jobs:
 
 ---
 
-## 🧮 Funciones de Contexto
+## Arrays en el Contexto: labels, assignees y similares
+
+Varios campos del contexto `github.event` son **arrays de objetos**, no valores simples. Los más comunes son:
+
+| Campo | Qué contiene |
+|---|---|
+| `github.event.pull_request.labels` | Etiquetas del PR |
+| `github.event.pull_request.assignees` | Usuarios asignados al PR |
+| `github.event.pull_request.requested_reviewers` | Revisores solicitados |
+| `github.event.pull_request.requested_teams` | Equipos revisores |
+| `github.event.issue.labels` | Etiquetas del issue |
+| `github.event.issue.assignees` | Usuarios asignados al issue |
+
+**Estructura de cada elemento de `labels`:**
+```yaml
+github.event.pull_request.labels[0].id          # ID numérico de la etiqueta
+github.event.pull_request.labels[0].name        # Nombre: "bug", "urgent", etc.
+github.event.pull_request.labels[0].color       # Color hex: "d73a4a"
+github.event.pull_request.labels[0].description # Descripción de la etiqueta
+github.event.pull_request.labels[0].default     # true si es etiqueta por defecto de GitHub
+```
+
+---
+
+### El operador `.*` — Extraer un campo de todos los elementos
+
+Como `labels` es un array de objetos, para acceder al `name` de **todas** las etiquetas a la vez se usa el operador `.*`:
+
+```
+github.event.pull_request.labels        → array de objetos label completos
+github.event.pull_request.labels.*.name → array de solo los nombres ["bug", "urgent"]
+```
+
+```yaml
+# Sin .*  → array de objetos completos (no útil para comparar directamente)
+github.event.pull_request.labels
+# → [{ id: 123, name: "bug", color: "d73a4a" }, { id: 456, name: "urgent", ... }]
+
+# Con .*  → array de solo el campo "name" (útil para contains())
+github.event.pull_request.labels.*.name
+# → ["bug", "urgent"]
+```
+
+> `.*` significa: **para cada elemento del array, dame el campo que viene después**. Es equivalente a un `.map()` en JavaScript.
+
+---
+
+### Usar `contains()` con arrays
+
+La función `contains()` acepta un array como primer argumento y comprueba si algún elemento coincide:
+
+```yaml
+# ¿Tiene la etiqueta "bug"?
+if: contains(github.event.pull_request.labels.*.name, 'bug')
+
+# ¿Tiene la etiqueta "urgent"?
+if: contains(github.event.pull_request.labels.*.name, 'urgent')
+
+# ¿Está asignado a un usuario concreto?
+if: contains(github.event.pull_request.assignees.*.login, 'dukono')
+
+# ¿Se ha solicitado revisión a alguien concreto?
+if: contains(github.event.pull_request.requested_reviewers.*.login, 'dukono')
+```
+
+---
+
+### Ejemplo completo con labels
+
+```yaml
+name: Gestión por Labels
+
+on:
+  pull_request:
+    types: [labeled, unlabeled, opened, synchronize]
+
+jobs:
+  deploy-preview:
+    # Ejecutar solo si el PR tiene la etiqueta "preview"
+    if: contains(github.event.pull_request.labels.*.name, 'preview')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Desplegar preview
+        run: echo "Desplegando preview del PR #${{ github.event.pull_request.number }}"
+
+  skip-ci:
+    # Ejecutar solo si NO tiene la etiqueta "skip-ci"
+    if: "!contains(github.event.pull_request.labels.*.name, 'skip-ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ejecutar tests
+        run: echo "Ejecutando tests..."
+
+  notify-urgent:
+    # Si tiene la etiqueta "urgent"
+    if: contains(github.event.pull_request.labels.*.name, 'urgent')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notificación urgente
+        run: echo "⚠️ PR urgente: ${{ github.event.pull_request.title }}"
+
+  show-all-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mostrar todas las etiquetas
+        run: |
+          # join() une los nombres con un separador
+          echo "Labels: ${{ join(github.event.pull_request.labels.*.name, ', ') }}"
+          # Ejemplo de salida: "Labels: bug, urgent, preview"
+```
+
+---
+
+### ⚠️ Limitación importante: `.*` solo funciona en expresiones `${{ }}`
+
+El operador `.*` es exclusivo de las **expresiones de GitHub Actions**, no es Bash ni JavaScript:
+
+```yaml
+# ✅ Correcto: dentro de expresión ${{ }}
+if: contains(github.event.pull_request.labels.*.name, 'bug')
+
+# ✅ Correcto: dentro de expresión ${{ }}
+run: echo "${{ join(github.event.pull_request.labels.*.name, ', ') }}"
+
+# ❌ No puedes hacer esto en Bash directamente
+run: echo "${github.event.pull_request.labels.*.name}"  # No funciona
+```
+
+Si necesitas iterar sobre los labels en un script Bash, usa `toJSON()` y `jq`:
+
+```yaml
+- name: Iterar labels en Bash
+  run: |
+    LABELS='${{ toJSON(github.event.pull_request.labels) }}'
+    echo "$LABELS" | jq -r '.[].name'   # Imprime cada nombre en una línea
+    
+    # Comprobar si existe un label concreto
+    HAS_BUG=$(echo "$LABELS" | jq -r '[.[].name] | contains(["bug"])')
+    echo "Tiene bug: $HAS_BUG"
+```
+
+---
+
+## Funciones de Contexto
 
 ### `contains()`
 
@@ -735,7 +909,7 @@ Estados de ejecución.
 
 ---
 
-## 📋 Tabla de Referencia Rápida
+## Tabla de Referencia Rápida
 
 | Contexto | Uso Principal | Ejemplo |
 |----------|---------------|---------|

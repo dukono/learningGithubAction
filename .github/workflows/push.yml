@@ -1,0 +1,133 @@
+name: Read branch info
+on: 
+  pull_request: 
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    
+jobs:
+  show-branch-info:
+    runs-on: ubuntu-latest
+    steps:
+      - name: get-all-info
+        id: getter
+        env:
+          GH_TOKEN: ${{ secrets.MY_TOKEN }}
+        run: |
+          echo "github.ref": "${{github.ref}}"
+          echo "github.sha": "${{github.sha}}"
+          echo "github.repository": "${{github.repository}}"
+          echo "github.event.after": "${{github.event.after}}" 
+          echo "github.event.before": "${{github.event.before}}"
+          echo "github.event.compare": "${{github.event.compare}}"
+          echo "github.event.created": "${{github.event.created}}"
+          echo "github.event.deleted": "${{github.event.deleted}}"
+          echo "github.event.forced": "${{github.event.forced}}"
+          echo "github.event.ref": "${{github.event.ref}}"
+          echo "github.actor": "${{github.actor}}"
+          echo "github.triggering_actor": "${{github.triggering_actor}}"
+          echo "github.repository_owner": "${{github.repository_owner}}"
+          echo "github.workspace": "${{github.workspace}}"
+          echo "ref=${{github.ref}}" >> $GITHUB_ENV
+          echo "current=${{github.sha}}" >> $GITHUB_ENV
+          echo "after=${{github.event.after}}" >> $GITHUB_ENV
+          echo "before=${{github.event.before}}" >> $GITHUB_ENV
+          echo "ref=${{github.ref}}" >> $GITHUB_OUTPUT
+          echo "current=${{github.sha}}" >> $GITHUB_OUTPUT
+          echo "after=${{github.event.after}}" >> $GITHUB_OUTPUT
+          echo "before=${{github.event.before}}" >> $GITHUB_OUTPUT
+      - name: get-pr-info
+        run: |
+          echo "=== github.event.pull_request ==="
+          echo "number":               "${{github.event.pull_request.number}}"
+          echo "title":                "${{github.event.pull_request.title}}"
+          echo "body":                 "${{github.event.pull_request.body}}"
+          echo "state":                "${{github.event.pull_request.state}}"
+          echo "draft":                "${{github.event.pull_request.draft}}"
+          echo "merged":               "${{github.event.pull_request.merged}}"
+          echo "mergeable":            "${{github.event.pull_request.mergeable}}"
+          echo "mergeable_state":      "${{github.event.pull_request.mergeable_state}}"
+          echo "merged_by":            "${{github.event.pull_request.merged_by}}"
+          echo "rebaseable":           "${{github.event.pull_request.rebaseable}}"
+          echo "locked":               "${{github.event.pull_request.locked}}"
+          echo "author_association":   "${{github.event.pull_request.author_association}}"
+          echo "changed_files":        "${{github.event.pull_request.changed_files}}"
+          echo "additions":            "${{github.event.pull_request.additions}}"
+          echo "deletions":            "${{github.event.pull_request.deletions}}"
+          echo "commits":              "${{github.event.pull_request.commits}}"
+          echo "review_comments":      "${{github.event.pull_request.review_comments}}"
+          echo "comments":             "${{github.event.pull_request.comments}}"
+          echo "html_url":             "${{github.event.pull_request.html_url}}"
+          echo "url":                  "${{github.event.pull_request.url}}"
+          echo "diff_url":             "${{github.event.pull_request.diff_url}}"
+          echo "patch_url":            "${{github.event.pull_request.patch_url}}"
+          echo "issue_url":            "${{github.event.pull_request.issue_url}}"
+          echo "commits_url":          "${{github.event.pull_request.commits_url}}"
+          echo "review_comments_url":  "${{github.event.pull_request.review_comments_url}}"
+          echo "created_at":           "${{github.event.pull_request.created_at}}"
+          echo "updated_at":           "${{github.event.pull_request.updated_at}}"
+          echo "closed_at":            "${{github.event.pull_request.closed_at}}"
+          echo "merged_at":            "${{github.event.pull_request.merged_at}}"
+          echo "=== head (rama origen) ==="
+          echo "head.ref":             "${{github.event.pull_request.head.ref}}"
+          echo "head.sha":             "${{github.event.pull_request.head.sha}}"
+          echo "head.label":           "${{github.event.pull_request.head.label}}"
+          echo "head.repo.full_name":  "${{github.event.pull_request.head.repo.full_name}}"
+          echo "=== base (rama destino) ==="
+          echo "base.ref":             "${{github.event.pull_request.base.ref}}"
+          echo "base.sha":             "${{github.event.pull_request.base.sha}}"
+          echo "base.label":           "${{github.event.pull_request.base.label}}"
+          echo "base.repo.full_name":  "${{github.event.pull_request.base.repo.full_name}}"
+          echo "=== user (autor del PR) ==="
+          echo "user.login":           "${{github.event.pull_request.user.login}}"
+          echo "user.id":              "${{github.event.pull_request.user.id}}"
+          echo "user.type":            "${{github.event.pull_request.user.type}}"
+          echo "user.site_admin":      "${{github.event.pull_request.user.site_admin}}"
+          echo "=== auto_merge ==="
+          echo "auto_merge":                    "${{github.event.pull_request.auto_merge}}"
+          echo "auto_merge.merge_method":       "${{github.event.pull_request.auto_merge.merge_method}}"
+          echo "auto_merge.enabled_by.login":   "${{github.event.pull_request.auto_merge.enabled_by.login}}"
+          echo "=== arrays ==="
+          echo "labels":                   "${{join(github.event.pull_request.labels.*.name, ', ')}}"
+          echo "assignees":                "${{join(github.event.pull_request.assignees.*.login, ', ')}}"
+          echo "requested_reviewers":      "${{join(github.event.pull_request.requested_reviewers.*.login, ', ')}}"
+          echo "requested_teams":          "${{join(github.event.pull_request.requested_teams.*.name, ', ')}}"
+          echo "milestone":                "${{github.event.pull_request.milestone.title}}"
+      - name: git-config
+        run: |
+          git config --global alias.l "log --graph --format=\"%C(yellow)%h%C(reset) - %C(cyan)%ad%C(reset) - %C(green)%<(15,trunc)%an%C(reset) - %s\" --date=local --date=format:\"%d-%m-%Y %H:%M\""
+          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/dukono/learningGithubAction.git .
+          git fetch origin ${before}
+          git fetch origin ${after}
+          git fetch origin ${{ github.ref }}
+          git checkout ${{ github.sha }}
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+      - name: commit-comparator
+        run: |
+          echo "'current'": $current
+          echo "'after'": $after
+          echo "'before'": $before
+          c=$(git l ${current} -10)
+          b=$(git l ${before} -10)
+          a=$(git l ${after} -10)
+          ab=$(git l ${before}..${after} -10)
+          
+          echo "-------------------"
+          echo ">>current<<<: $current"
+          echo "$c"
+          echo "-------------------"
+          echo ">>after<<: $after"
+          echo "$a"
+          echo "-------------------"
+          echo ">>before<<: $before" 
+          echo "$b"
+          echo "-------------------"
+          echo ">>after - before<<:" 
+          echo "$ab"
+          
+          echo "rama contiene: 'feature'": ${{ contains(steps.getter.outputs.ref, 'feature') }}
+          echo "ref empieza con 'refs/heads/'": ${{ startsWith(steps.getter.outputs.ref, 'refs/heads/') }}
+          echo "ref endsWith con '/main'": ${{ endsWith(steps.getter.outputs.ref, '/main') }}
+          echo "version": ${{ format('Version: {0}.{1}', '1', '2') }}
+          result=$(ls -lta ${{github.workspace}})
+          echo "-------------------"
+          echo "ls -lta 'github.workspace' (${{github.workspace}})" = "$result"
