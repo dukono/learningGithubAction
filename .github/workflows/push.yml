@@ -19,7 +19,17 @@ jobs:
           echo "github.event.deleted": "${{github.event.deleted}}"
           echo "github.event.forced": "${{github.event.forced}}"
           echo "github.event.ref": "${{github.event.ref}}"
-          echo "afer=${{github.event.after}}" >> $GITHUB_OUTPUT
+          echo "github.actor": "${{github.actor}}
+          echo "github.triggering_actor": "${{github.triggering_actor}}
+          echo "github.repository_owner": "${{github.repository_owner}}
+          echo "github.workspace": "${{github.workspace}}
+          
+          echo "after=${{github.event.after}}" >> $GITHUB_OUTPUT
+          echo "before=${{github.event.before}}" >> $GITHUB_OUTPUT
       - name: comparatorInfo
         run: |
-          echo "${{steps.getter.outputs.afer}}"
+          echo "after > before": "${{steps.getter.outputs.after}} > ${{steps.getter.outputs.before}}"
+          echo "rama contiene: 'feature'": ${{ contains(github.ref, 'feature') }}
+          echo "ref empieza con 'refs/heads/'": ${{ startsWith(github.ref, 'refs/heads/') }}
+          echo "ref empieza con 'refs/heads/'": ${{ endsWith(github.ref, '/main') }}
+          echo "ref empieza con 'refs/heads/'": ${{ format('Version: {0}.{1}', '1', '2') }}
