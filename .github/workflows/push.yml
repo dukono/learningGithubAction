@@ -28,7 +28,7 @@ jobs:
           echo "before=${{github.event.before}}" >> $GITHUB_OUTPUT
       - name: comparatorInfo
         run: |
-          echo "after > before": "${{steps.getter.outputs.after}} > ${{steps.getter.outputs.before}}"
+          echo "after > before": "${{steps.getter.outputs.after > steps.getter.outputs.before}}"
           echo "rama contiene: 'feature'": ${{ contains(github.ref, 'feature') }}
           echo "ref empieza con 'refs/heads/'": ${{ startsWith(github.ref, 'refs/heads/') }}
           echo "ref empieza con 'refs/heads/'": ${{ endsWith(github.ref, '/main') }}
