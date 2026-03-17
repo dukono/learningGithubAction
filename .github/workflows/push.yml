@@ -31,5 +31,5 @@ jobs:
           echo "after > before": "${{steps.getter.outputs.after > steps.getter.outputs.before}}"
           echo "rama contiene: 'feature'": ${{ contains(github.ref, 'feature') }}
           echo "ref empieza con 'refs/heads/'": ${{ startsWith(github.ref, 'refs/heads/') }}
-          echo "ref empieza con 'refs/heads/'": ${{ endsWith(github.ref, '/main') }}
-          echo "ref empieza con 'refs/heads/'": ${{ format('Version: {0}.{1}', '1', '2') }}
+          echo "ref endsWith con '/main'": ${{ endsWith(github.ref, '/main') }}
+          echo "version": ${{ format('Version: {0}.{1}', '1', '2') }}
