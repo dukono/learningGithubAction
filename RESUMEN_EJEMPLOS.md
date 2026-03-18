@@ -303,7 +303,7 @@ Prepare → Deploy DEV → Deploy STAGING → Deploy PRODUCTION → Report
 cat README.md
 
 # 2. Leer la arquitectura técnica
-cat GITHUB_ACTIONS_ARQUITECTURA_TECNICA.md
+cat ARQUITECTURA_TECNICA.md
 
 # 3. Ejecutar la demo interactiva
 gh workflow run "00 - DEMO COMPLETA" -f demo-mode=quick

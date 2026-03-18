@@ -1,7 +1,8 @@
-# 🎭 GitHub Actions: Contextos y Variables Completas
+# GitHub Actions: Contextos y Variables Completas
 
-## 📚 Índice
+## Índice
 1. [Contexto `github`](#contexto-github)
+   - [Eventos Específicos por Trigger](#eventos-específicos)
 2. [Contexto `env`](#contexto-env)
 3. [Contexto `job`](#contexto-job)
 4. [Contexto `steps`](#contexto-steps)
@@ -11,11 +12,13 @@
 8. [Contexto `strategy` y `matrix`](#contexto-strategy-y-matrix)
 9. [Contexto `needs`](#contexto-needs)
 10. [Contexto `inputs`](#contexto-inputs)
-11. [Funciones de Contexto](#funciones-de-contexto)
+11. [Arrays en el Contexto: labels, assignees y similares](#arrays-en-el-contexto-labels-assignees-y-similares)
+12. [Funciones de Contexto](#funciones-de-contexto)
+13. [Tabla de Referencia Rápida](#tabla-de-referencia-rápida)
 
 ---
 
-## 📦 Contexto `github`
+## Contexto `github`
 
 ### Propiedades Generales
 
@@ -65,7 +68,7 @@ github.workspace           # Path del workspace
 
 ---
 
-## 🔄 Eventos Específicos
+## Eventos Específicos
 
 ### Evento: `pull_request` / `pull_request_target`
 
@@ -307,7 +310,7 @@ github.event.schedule                                  # Expresión cron que dis
 
 ---
 
-## 🌍 Contexto `env`
+## Contexto `env`
 
 Variables de entorno definidas en el workflow.
 
@@ -353,7 +356,7 @@ run: |
 
 ---
 
-## 🏃 Contexto `runner`
+## Contexto `runner`
 
 Información sobre el runner (máquina que ejecuta el workflow).
 
@@ -388,7 +391,7 @@ runner.debug               # '1' si debug está habilitado
 
 ---
 
-## 📤 Contexto `steps`
+## Contexto `steps`
 
 Outputs de steps anteriores.
 
@@ -423,7 +426,7 @@ steps:
 
 ---
 
-## 💼 Contexto `job`
+## Contexto `job`
 
 Información sobre el job actual.
 
@@ -448,7 +451,7 @@ job.status                 # success, failure, cancelled
 
 ---
 
-## 🔐 Contexto `secrets`
+## Contexto `secrets`
 
 Secretos encriptados configurados en GitHub.
 
@@ -477,7 +480,7 @@ secrets.INHERITED_SECRET   # Secretos de la organización
 
 ---
 
-## 🔧 Contexto `vars`
+## Contexto `vars`
 
 Variables de configuración (no encriptadas).
 
@@ -492,7 +495,7 @@ vars.ORG_VAR              # Variables de organización
 
 ---
 
-## 📊 Contexto `strategy` y `matrix`
+## Contexto `strategy` y `matrix`
 
 Para jobs con matrices.
 
@@ -528,7 +531,7 @@ steps:
 
 ---
 
-## 🔗 Contexto `needs`
+## Contexto `needs`
 
 Outputs de jobs dependientes.
 
@@ -565,7 +568,7 @@ jobs:
 
 ---
 
-## 📥 Contexto `inputs`
+## Contexto `inputs`
 
 Inputs de workflows reutilizables o manuales.
 
@@ -621,7 +624,150 @@ jobs:
 
 ---
 
-## 🧮 Funciones de Contexto
+## Arrays en el Contexto: labels, assignees y similares
+
+Varios campos del contexto `github.event` son **arrays de objetos**, no valores simples. Los más comunes son:
+
+| Campo | Qué contiene |
+|---|---|
+| `github.event.pull_request.labels` | Etiquetas del PR |
+| `github.event.pull_request.assignees` | Usuarios asignados al PR |
+| `github.event.pull_request.requested_reviewers` | Revisores solicitados |
+| `github.event.pull_request.requested_teams` | Equipos revisores |
+| `github.event.issue.labels` | Etiquetas del issue |
+| `github.event.issue.assignees` | Usuarios asignados al issue |
+
+**Estructura de cada elemento de `labels`:**
+```yaml
+github.event.pull_request.labels[0].id          # ID numérico de la etiqueta
+github.event.pull_request.labels[0].name        # Nombre: "bug", "urgent", etc.
+github.event.pull_request.labels[0].color       # Color hex: "d73a4a"
+github.event.pull_request.labels[0].description # Descripción de la etiqueta
+github.event.pull_request.labels[0].default     # true si es etiqueta por defecto de GitHub
+```
+
+---
+
+### El operador `.*` — Extraer un campo de todos los elementos
+
+Como `labels` es un array de objetos, para acceder al `name` de **todas** las etiquetas a la vez se usa el operador `.*`:
+
+```
+github.event.pull_request.labels        → array de objetos label completos
+github.event.pull_request.labels.*.name → array de solo los nombres ["bug", "urgent"]
+```
+
+```yaml
+# Sin .*  → array de objetos completos (no útil para comparar directamente)
+github.event.pull_request.labels
+# → [{ id: 123, name: "bug", color: "d73a4a" }, { id: 456, name: "urgent", ... }]
+
+# Con .*  → array de solo el campo "name" (útil para contains())
+github.event.pull_request.labels.*.name
+# → ["bug", "urgent"]
+```
+
+> `.*` significa: **para cada elemento del array, dame el campo que viene después**. Es equivalente a un `.map()` en JavaScript.
+
+---
+
+### Usar `contains()` con arrays
+
+La función `contains()` acepta un array como primer argumento y comprueba si algún elemento coincide:
+
+```yaml
+# ¿Tiene la etiqueta "bug"?
+if: contains(github.event.pull_request.labels.*.name, 'bug')
+
+# ¿Tiene la etiqueta "urgent"?
+if: contains(github.event.pull_request.labels.*.name, 'urgent')
+
+# ¿Está asignado a un usuario concreto?
+if: contains(github.event.pull_request.assignees.*.login, 'dukono')
+
+# ¿Se ha solicitado revisión a alguien concreto?
+if: contains(github.event.pull_request.requested_reviewers.*.login, 'dukono')
+```
+
+---
+
+### Ejemplo completo con labels
+
+```yaml
+name: Gestión por Labels
+
+on:
+  pull_request:
+    types: [labeled, unlabeled, opened, synchronize]
+
+jobs:
+  deploy-preview:
+    # Ejecutar solo si el PR tiene la etiqueta "preview"
+    if: contains(github.event.pull_request.labels.*.name, 'preview')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Desplegar preview
+        run: echo "Desplegando preview del PR #${{ github.event.pull_request.number }}"
+
+  skip-ci:
+    # Ejecutar solo si NO tiene la etiqueta "skip-ci"
+    if: "!contains(github.event.pull_request.labels.*.name, 'skip-ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ejecutar tests
+        run: echo "Ejecutando tests..."
+
+  notify-urgent:
+    # Si tiene la etiqueta "urgent"
+    if: contains(github.event.pull_request.labels.*.name, 'urgent')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notificación urgente
+        run: echo "⚠️ PR urgente: ${{ github.event.pull_request.title }}"
+
+  show-all-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mostrar todas las etiquetas
+        run: |
+          # join() une los nombres con un separador
+          echo "Labels: ${{ join(github.event.pull_request.labels.*.name, ', ') }}"
+          # Ejemplo de salida: "Labels: bug, urgent, preview"
+```
+
+---
+
+### ⚠️ Limitación importante: `.*` solo funciona en expresiones `${{ }}`
+
+El operador `.*` es exclusivo de las **expresiones de GitHub Actions**, no es Bash ni JavaScript:
+
+```yaml
+# ✅ Correcto: dentro de expresión ${{ }}
+if: contains(github.event.pull_request.labels.*.name, 'bug')
+
+# ✅ Correcto: dentro de expresión ${{ }}
+run: echo "${{ join(github.event.pull_request.labels.*.name, ', ') }}"
+
+# ❌ No puedes hacer esto en Bash directamente
+run: echo "${github.event.pull_request.labels.*.name}"  # No funciona
+```
+
+Si necesitas iterar sobre los labels en un script Bash, usa `toJSON()` y `jq`:
+
+```yaml
+- name: Iterar labels en Bash
+  run: |
+    LABELS='${{ toJSON(github.event.pull_request.labels) }}'
+    echo "$LABELS" | jq -r '.[].name'   # Imprime cada nombre en una línea
+    
+    # Comprobar si existe un label concreto
+    HAS_BUG=$(echo "$LABELS" | jq -r '[.[].name] | contains(["bug"])')
+    echo "Tiene bug: $HAS_BUG"
+```
+
+---
+
+## Funciones de Contexto
 
 ### `contains()`
 
@@ -735,7 +881,7 @@ Estados de ejecución.
 
 ---
 
-## 📋 Tabla de Referencia Rápida
+## Tabla de Referencia Rápida
 
 | Contexto | Uso Principal | Ejemplo |
 |----------|---------------|---------|
