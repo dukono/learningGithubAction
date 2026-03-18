@@ -26,10 +26,6 @@ jobs:
           echo "github.triggering_actor": "${{github.triggering_actor}}
           echo "github.repository_owner": "${{github.repository_owner}}
           echo "github.workspace": "${{github.workspace}}
-          echo "ref=${{github.ref}}" >> $GITHUB_ENV
-          echo "current=${{github.sha}}" >> $GITHUB_ENV
-          echo "after=${{github.event.after}}" >> $GITHUB_ENV
-          echo "before=${{github.event.before}}" >> $GITHUB_ENV
           echo "ref=${{github.ref}}" >> $GITHUB_OUTPUT
           echo "current=${{github.sha}}" >> $GITHUB_OUTPUT
           echo "after=${{github.event.after}}" >> $GITHUB_OUTPUT
