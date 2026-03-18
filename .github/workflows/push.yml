@@ -1,13 +1,13 @@
-name: Add comment
+name: Read branch info
 on: 
   pull_request: 
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     
 jobs:
-  show-info:
+  show-branch-info:
     runs-on: ubuntu-latest
     steps:
-      - name: getterInfo
+      - name: get-all-info
         id: getter
         env:
           GH_TOKEN: ${{ secrets.MY_TOKEN }}
@@ -26,24 +26,47 @@ jobs:
           echo "github.triggering_actor": "${{github.triggering_actor}}
           echo "github.repository_owner": "${{github.repository_owner}}
           echo "github.workspace": "${{github.workspace}}
-          
-          echo "ref=${{github.ref}}" >> $GITHUB_OUTPUT
-          echo "after=${{github.event.after}}" >> $GITHUB_OUTPUT
+          echo "ref=${{github.ref}}" >> $GITHUB_ENV
+          echo "current=${{github.sha}}" >> $GITHUB_ENV
+          echo "after=${{github.event.after}}" >> $GITHUB_ENV
           echo "before=${{github.event.before}}" >> $GITHUB_ENV
-          echo "✅ Fin 'getterInfo'" >> $GITHUB_STEP_SUMMARY
-      - name: git
+      - name: git-config
         run: |
-          git config --global alias.l "log --graph --format=\"%C(yellow)%h%C(reset) - %C(cyan)%ad%C(reset) - %C(green)%<(15,trunc)%an%C(reset) - %s\" --date=local --date=format:\"%d-%m-%Y %H:%M\" "
+          git config --global alias.l "log --graph --format=\"%C(yellow)%h%C(reset) - %C(cyan)%ad%C(reset) - %C(green)%<(15,trunc)%an%C(reset) - %s\" --date=local --date=format:\"%d-%m-%Y %H:%M\""
           git clone https://x-access-token:${GITHUB_TOKEN}@github.com/dukono/learningGithubAction.git .
+          git fetch origin ${before}
+          git fetch origin ${after}
+          git fetch origin ${{ github.ref }}
           git checkout ${{ github.sha }}
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
-      - name: comparatorInfo
+      - name: commit-comparator
         run: |
-          echo "git l before..after -10: $(git l -10 $before..${{steps.getter.outputs.after}})"
+          echo "'current'": $current
+          echo "'after'": $after
+          echo "'before'": $before
+          c=$(git l ${current} -10)
+          b=$(git l ${before} -10)
+          a=$(git l ${after} -10)
+          ab=$(git l ${before}..${after} -10)
+          
+          echo "-------------------"
+          echo ">>current<<<: $current"
+          echo "$c"
+          echo "-------------------"
+          echo ">>after<<: $after"
+          echo "$a"
+          echo "-------------------"
+          echo ">>before<<: $before" 
+          echo "$b"
+          echo "-------------------"
+          echo ">>after - before<<:" 
+          echo "$ab"
+          
           echo "rama contiene: 'feature'": ${{ contains(steps.getter.outputs.ref, 'feature') }}
           echo "ref empieza con 'refs/heads/'": ${{ startsWith(steps.getter.outputs.ref, 'refs/heads/') }}
           echo "ref endsWith con '/main'": ${{ endsWith(steps.getter.outputs.ref, '/main') }}
           echo "version": ${{ format('Version: {0}.{1}', '1', '2') }}
           result=$(ls -lta ${{github.workspace}})
-          echo "ls -lta 'github.workspace' (${{github.workspace}})" = $result
+          echo "-------------------"
+          echo "ls -lta 'github.workspace' (${{github.workspace}})" = "$result"
