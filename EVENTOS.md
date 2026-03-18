@@ -1,19 +1,47 @@
 # 🎯 GitHub Actions: Eventos y Triggers Completos
 
-## 📚 Índice
-1. [Eventos de Código](#eventos-de-código)
-2. [Eventos de Issues y PRs](#eventos-de-issues-y-prs)
-3. [Eventos de Releases y Tags](#eventos-de-releases-y-tags)
-4. [Eventos de Colaboración](#eventos-de-colaboración)
-5. [Eventos Programados](#eventos-programados)
-6. [Eventos Manuales](#eventos-manuales)
-7. [Eventos de Workflows](#eventos-de-workflows)
-8. [Filtros y Opciones](#filtros-y-opciones)
-9. [Combinación de Eventos](#combinación-de-eventos)
+## Índice
+
+### Eventos de Código
+- [`push`](#push)
+- [`pull_request`](#pull_request)
+- [`pull_request_target`](#pull_request_target)
+- [`create`](#create)
+- [`delete`](#delete)
+
+### Eventos de Issues y PRs
+- [`issues`](#issues)
+- [`issue_comment`](#issue_comment)
+- [`pull_request_review`](#pull_request_review)
+- [`pull_request_review_comment`](#pull_request_review_comment)
+
+### Eventos de Releases y Tags
+- [`release`](#release)
+- [`workflow_run`](#workflow_run)
+
+### Eventos de Colaboración
+- [`fork`](#fork)
+- [`star` / `watch`](#star--watch)
+- [`member`](#member)
+
+### Eventos Programados
+- [`schedule`](#schedule)
+
+### Eventos Manuales
+- [`workflow_dispatch`](#workflow_dispatch)
+- [`repository_dispatch`](#repository_dispatch)
+
+### Eventos de Workflows
+- [`workflow_call`](#workflow_call)
+
+### Referencia
+- [Filtros y Opciones Avanzadas](#filtros-y-opciones-avanzadas)
+- [Combinación de Eventos](#combinación-de-eventos)
+- [Tabla de Referencia Rápida](#tabla-de-referencia-rápida)
 
 ---
 
-## 📝 Eventos de Código
+## Eventos de Código
 
 ### `push`
 
@@ -92,32 +120,37 @@ jobs:
 
 Se dispara en eventos de Pull Request.
 
-**Tipos de actividad:**
+**Tipos de actividad (`types`) y cuándo salta cada uno:**
+
+| Type | Cuándo salta | Notas |
+|---|---|---|
+| `opened` | Al crear el PR por primera vez | Solo salta una vez por PR |
+| `edited` | Al editar el **título o descripción** del PR | No salta por nuevos commits |
+| `closed` | Al cerrar el PR, tanto si se mergea como si no | Usar `github.event.pull_request.merged` para distinguir |
+| `reopened` | Al reabrir un PR cerrado | |
+| `synchronize` | Al añadir nuevos commits a la rama del PR | Es el más común en CI: salta en cada `git push` de la rama |
+| `assigned` | Al asignar un usuario al PR | |
+| `unassigned` | Al quitar un usuario asignado | |
+| `labeled` | Al añadir una etiqueta al PR | |
+| `unlabeled` | Al quitar una etiqueta del PR | |
+| `locked` | Al bloquear la conversación del PR | |
+| `unlocked` | Al desbloquear la conversación del PR | |
+| `review_requested` | Al solicitar revisión a alguien | |
+| `review_request_removed` | Al quitar una solicitud de revisión | |
+| `ready_for_review` | Al sacar el PR del estado **draft** (listo para revisar) | Solo salta al cambiar de draft → listo |
+| `converted_to_draft` | Al convertir el PR a **draft** | Solo salta al cambiar de listo → draft |
+| `auto_merge_enabled` | Al activar el auto-merge en el PR | |
+| `auto_merge_disabled` | Al desactivar el auto-merge en el PR | |
+
+**Por defecto (sin especificar `types`):**
+Si no indicas `types:`, GitHub solo dispara en: `opened`, `synchronize`, `reopened`
+
 ```yaml
+# Equivalente a no poner types:
 on:
   pull_request:
-    types:
-      - opened              # PR abierto
-      - edited              # Título o descripción editados
-      - closed              # PR cerrado (merged o no)
-      - reopened            # PR reabierto
-      - synchronize         # Nuevos commits añadidos
-      - assigned            # Alguien asignado
-      - unassigned          # Alguien desasignado
-      - labeled             # Etiqueta añadida
-      - unlabeled           # Etiqueta removida
-      - locked              # Conversación bloqueada
-      - unlocked            # Conversación desbloqueada
-      - review_requested    # Revisión solicitada
-      - review_request_removed # Revisión removida
-      - ready_for_review    # Marcado como listo (saliendo de draft)
-      - converted_to_draft  # Convertido a draft
-      - auto_merge_enabled  # Auto-merge habilitado
-      - auto_merge_disabled # Auto-merge deshabilitado
+    types: [opened, synchronize, reopened]
 ```
-
-**Por defecto (sin `types`):**
-Se dispara en: `opened`, `synchronize`, `reopened`
 
 **Con filtros:**
 ```yaml
@@ -279,7 +312,7 @@ jobs:
 
 ---
 
-## 🎫 Eventos de Issues y PRs
+## Eventos de Issues y PRs
 
 ### `issues`
 
@@ -428,7 +461,7 @@ on:
 
 ---
 
-## 🏷️ Eventos de Releases y Tags
+## Eventos de Releases y Tags
 
 ### `release`
 
@@ -522,7 +555,7 @@ jobs:
 
 ---
 
-## 👥 Eventos de Colaboración
+## Eventos de Colaboración
 
 ### `fork`
 
@@ -577,7 +610,7 @@ on:
 
 ---
 
-## ⏰ Eventos Programados
+## Eventos Programados
 
 ### `schedule`
 
@@ -654,7 +687,7 @@ jobs:
 
 ---
 
-## 🎛️ Eventos Manuales
+## Eventos Manuales
 
 ### `workflow_dispatch`
 
@@ -757,7 +790,7 @@ jobs:
 
 ---
 
-## 🔗 Eventos de Workflows
+## Eventos de Workflows
 
 ### `workflow_call`
 
@@ -809,7 +842,7 @@ jobs:
 
 ---
 
-## 🎚️ Filtros y Opciones Avanzadas
+## Filtros y Opciones Avanzadas
 
 ### Activity types
 
@@ -890,7 +923,7 @@ on:
 
 ---
 
-## 🔀 Combinación de Eventos
+## Combinación de Eventos
 
 ### Múltiples eventos
 
@@ -950,7 +983,7 @@ jobs:
 
 ---
 
-## 📊 Tabla de Referencia Rápida
+## Tabla de Referencia Rápida
 
 | Evento | Cuándo se dispara | Uso común |
 |--------|-------------------|-----------|

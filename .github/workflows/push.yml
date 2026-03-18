@@ -1,5 +1,8 @@
 name: Add comment
-on: push
+on: 
+  pull_request: 
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    
 jobs:
   show-info:
     runs-on: ubuntu-latest
@@ -26,13 +29,21 @@ jobs:
           
           echo "ref=${{github.ref}}" >> $GITHUB_OUTPUT
           echo "after=${{github.event.after}}" >> $GITHUB_OUTPUT
-          echo "before=${{github.event.before}}" >> $GITHUB_OUTPUT
+          echo "before=${{github.event.before}}" >> $GITHUB_ENV
+          echo "✅ Fin 'getterInfo'" >> $GITHUB_STEP_SUMMARY
+      - name: git
+        run: |
+          git config --global alias.l "log --graph --format=\"%C(yellow)%h%C(reset) - %C(cyan)%ad%C(reset) - %C(green)%<(15,trunc)%an%C(reset) - %s\" --date=local --date=format:\"%d-%m-%Y %H:%M\" "
+          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/dukono/learningGithubAction.git .
+          git checkout ${{ github.sha }}
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
       - name: comparatorInfo
         run: |
-          echo "after > before": "${{steps.getter.outputs.after > steps.getter.outputs.before}}"
+          echo "git l before..after -10: $(git l -10 $before..${{steps.getter.outputs.after}})"
           echo "rama contiene: 'feature'": ${{ contains(steps.getter.outputs.ref, 'feature') }}
           echo "ref empieza con 'refs/heads/'": ${{ startsWith(steps.getter.outputs.ref, 'refs/heads/') }}
           echo "ref endsWith con '/main'": ${{ endsWith(steps.getter.outputs.ref, '/main') }}
           echo "version": ${{ format('Version: {0}.{1}', '1', '2') }}
           result=$(ls -lta ${{github.workspace}})
-          echo "ls -lta 'github.workspace' (${{github.workspace}}) = $result"
+          echo "ls -lta 'github.workspace' (${{github.workspace}})" = $result

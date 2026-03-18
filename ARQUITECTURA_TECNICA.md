@@ -8,6 +8,7 @@
 4. [Sistema de Eventos](#4-sistema-de-eventos)
 5. [Runners: La Infraestructura de Ejecución](#5-runners-la-infraestructura-de-ejecución)
 6. [Contextos: El Sistema de Variables](#6-contextos-el-sistema-de-variables)
+   - [6.5 Variables de Entorno Automáticas del Runner](#65-variables-de-entorno-automáticas-del-runner)
 7. [Expresiones y Motor de Evaluación](#7-expresiones-y-motor-de-evaluación)
 8. [Sistema de Almacenamiento](#8-sistema-de-almacenamiento)
 9. [Seguridad y Aislamiento](#9-seguridad-y-aislamiento)
@@ -2735,6 +2736,361 @@ Job 6: os=windows-latest, node=18
 
 ---
 
+### 6.5 Variables de Entorno Automáticas del Runner
+
+Los **contextos** (`${{ github.sha }}`) son solo una forma de acceder a información. Existe una segunda forma: **variables de entorno** que GitHub inyecta automáticamente en el runner antes de ejecutar el primer step.
+
+#### Contextos vs Variables de Entorno
+
+```
+Dos formas de acceder a la misma información:
+
+${{ github.sha }}    → Expresión de contexto (YAML)
+$GITHUB_SHA          → Variable de entorno (Bash)
+
+┌─────────────────────────────────────────────────────┐
+│ Expresiones ${{ }}                                  │
+│  - Se resuelven en GitHub ANTES de enviar al runner │
+│  - Disponibles en cualquier campo YAML              │
+│  - Ej: if:, env:, run:, name:                       │
+├─────────────────────────────────────────────────────┤
+│ Variables de entorno $VAR                           │
+│  - Se resuelven en el runner, en tiempo de shell    │
+│  - Solo disponibles dentro de bloques run:          │
+│  - Más seguras para tokens (no se exponen en YAML)  │
+└─────────────────────────────────────────────────────┘
+```
+
+```yaml
+# Ambas son equivalentes en un run:
+- run: |
+    echo $GITHUB_SHA                  # Variable de entorno
+    echo "${{ github.sha }}"          # Expresión de contexto
+    # Ambas imprimen el mismo valor
+```
+
+---
+
+#### Variables de Identidad del Workflow
+
+| Variable | Descripción | Disponible en | Ejemplo |
+|---|---|---|---|
+| `GITHUB_WORKFLOW` | Nombre del workflow | Siempre | `CI Pipeline` |
+| `GITHUB_WORKFLOW_REF` | Ref del archivo del workflow | Siempre | `owner/repo/.github/workflows/ci.yml@refs/heads/main` |
+| `GITHUB_RUN_ID` | ID único de la ejecución (global) | Siempre | `1658821493` |
+| `GITHUB_RUN_NUMBER` | Número secuencial de ejecución del workflow | Siempre | `42` |
+| `GITHUB_RUN_ATTEMPT` | Número de reintento (1 si no se reintentó) | Siempre | `1` |
+| `GITHUB_JOB` | ID del job actual | Siempre | `build` |
+| `GITHUB_ACTION` | ID del step actual | Siempre | `__run` |
+| `GITHUB_ACTION_PATH` | Path de la acción en uso | ⚠️ Solo cuando el step ejecuta una `action` (no en `run:`) | `/home/runner/work/_actions/actions/checkout/v4` |
+
+---
+
+#### Variables del Repositorio y Actor
+
+| Variable | Descripción | Disponible en | Ejemplo |
+|---|---|---|---|
+| `GITHUB_REPOSITORY` | `owner/repo` | Siempre | `dukono/learningGithubAction` |
+| `GITHUB_REPOSITORY_ID` | ID numérico del repo | Siempre | `123456789` |
+| `GITHUB_REPOSITORY_OWNER` | Propietario del repo | Siempre | `dukono` |
+| `GITHUB_ACTOR` | Usuario que disparó el evento | Siempre | `dukono` |
+| `GITHUB_ACTOR_ID` | ID numérico del actor | Siempre | `987654` |
+| `GITHUB_SERVER_URL` | URL del servidor de GitHub | Siempre | `https://github.com` |
+| `GITHUB_API_URL` | URL de la API de GitHub | Siempre | `https://api.github.com` |
+| `GITHUB_GRAPHQL_URL` | URL de la API GraphQL | Siempre | `https://api.github.com/graphql` |
+| `GITHUB_TOKEN` | Token de autenticación temporal generado automáticamente para el workflow | Siempre | `ghp_xxxxxxxxxxxx` |
+
+> **`GITHUB_TOKEN`**: Es el mismo token que `${{ secrets.GITHUB_TOKEN }}` pero accesible como variable de entorno Bash directamente dentro de un `run:`. Se genera automáticamente por GitHub al inicio de cada workflow, tiene permisos configurables sobre el repo, y se revoca al terminar la ejecución. Es más seguro usarlo como `$GITHUB_TOKEN` en Bash que como `${{ secrets.GITHUB_TOKEN }}` porque la expansión ocurre en tiempo de ejecución del shell y **no queda expuesto en el YAML procesado**.
+>
+> ```yaml
+> - name: Usar token en Bash
+>   run: |
+>     # Ambas formas son equivalentes, pero $GITHUB_TOKEN es más segura
+>     git clone https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git
+>     gh auth login --with-token <<< "$GITHUB_TOKEN"
+> ```
+
+---
+
+#### Variables del Commit y Rama
+
+| Variable | Descripción | Disponible en | Ejemplo |
+|---|---|---|---|
+| `GITHUB_SHA` | Hash completo del commit que disparó el evento | Siempre | `ffac537e6cbbf934b08745a378932722df287a53` |
+| `GITHUB_REF` | Ref completa que disparó el evento | Siempre | `refs/heads/main` |
+| `GITHUB_REF_NAME` | Nombre corto de la rama o tag | Siempre | `main` |
+| `GITHUB_REF_TYPE` | Tipo de ref: `branch` o `tag` | Siempre | `branch` |
+| `GITHUB_REF_PROTECTED` | Si la rama está protegida | Siempre | `true` o `false` |
+| `GITHUB_BASE_REF` | Rama **destino** del PR (a donde se mergea) | ⚠️ Solo en `pull_request` | `main` |
+| `GITHUB_HEAD_REF` | Rama **origen** del PR (la que se mergea) | ⚠️ Solo en `pull_request` | `feature/nueva-funcionalidad` |
+| `GITHUB_EVENT_NAME` | Nombre del evento que disparó el workflow | Siempre | `push`, `pull_request` |
+| `GITHUB_EVENT_PATH` | Path al archivo JSON con el payload completo del evento | Siempre | `/home/runner/work/_temp/_github_workflow/event.json` |
+
+> ⚠️ **`GITHUB_BASE_REF` y `GITHUB_HEAD_REF` solo existen en eventos `pull_request`**. En un `push` están vacías. No uses `GITHUB_HEAD_REF` para hacer checkout en un push, usa `GITHUB_SHA`.
+
+**¿Por qué usar `GITHUB_SHA` para checkout y no `GITHUB_HEAD_REF`?**
+
+```
+GITHUB_SHA       → commit EXACTO que disparó el evento (siempre disponible)
+GITHUB_HEAD_REF  → nombre de la RAMA origen de un PR (solo en pull_request)
+
+Problema con GITHUB_HEAD_REF:
+  1. Solo existe en pull_request, en push está vacío
+  2. Es un nombre de rama, que puede avanzar mientras corre el workflow
+  3. Si alguien hace push mientras corre el job, el checkout sería de otro commit
+
+Solución: usar GITHUB_SHA garantiza reproducibilidad:
+  → siempre el commit exacto que ves en la UI para esa ejecución
+```
+
+```yaml
+# ✅ Correcto: siempre apunta al commit exacto del evento
+- run: git checkout $GITHUB_SHA
+
+# ❌ Incorrecto para push: GITHUB_HEAD_REF está vacío
+# ❌ Incorrecto para PR: la rama puede avanzar durante la ejecución
+- run: git checkout $GITHUB_HEAD_REF
+```
+
+---
+
+#### Variables del Sistema de Archivos del Runner
+
+| Variable | Descripción | Disponible en | Ejemplo |
+|---|---|---|---|
+| `GITHUB_WORKSPACE` | Directorio donde se clona el repo (con `actions/checkout`) | Siempre (vacío hasta `checkout`) | `/home/runner/work/repo/repo` |
+| `RUNNER_TEMP` | Directorio temporal (se limpia entre jobs) | Siempre | `/home/runner/work/_temp` |
+| `RUNNER_TOOL_CACHE` | Cache de herramientas instaladas | Siempre | `/opt/hostedtoolcache` |
+| `RUNNER_WORKSPACE` | Directorio raíz del workspace del runner | Siempre | `/home/runner/work/repo` |
+
+> **Importante**: `GITHUB_WORKSPACE` estará **vacío** hasta que ejecutes `actions/checkout`. El directorio existe pero sin código del repositorio.
+
+---
+
+#### Variables del Runner
+
+| Variable | Descripción | Disponible en | Ejemplo |
+|---|---|---|---|
+| `RUNNER_OS` | Sistema operativo del runner | Siempre | `Linux`, `Windows`, `macOS` |
+| `RUNNER_ARCH` | Arquitectura del runner | Siempre | `X64`, `ARM64` |
+| `RUNNER_NAME` | Nombre del runner | Siempre | `GitHub Actions 2` |
+| `RUNNER_ENVIRONMENT` | Tipo de runner | Siempre | `github-hosted` o `self-hosted` |
+| `RUNNER_DEBUG` | `1` si el modo debug está activado | ⚠️ Solo cuando se activa el modo debug en la UI de GitHub | `1` |
+
+---
+
+#### Archivos Especiales de Comunicación entre Steps
+
+Estos **no son variables normales**, sino **paths a archivos** en el disco del runner. GitHub los crea automáticamente y los lee al finalizar cada step para aplicar su efecto. Se escriben con `echo "..." >> $ARCHIVO` (append, no overwrite).
+
+```
+¿Por qué archivos y no variables directas?
+Porque un proceso hijo (el shell del run:) NO puede modificar
+las variables de entorno del proceso padre (el runner).
+Solución: escribir en un archivo que el runner lee y aplica.
+```
+
+---
+
+##### `GITHUB_OUTPUT` — Pasar valores entre steps (requiere `id`)
+
+**Propósito**: Que un step **exporte un valor** para que **otro step lo lea** usando `${{ steps.<id>.outputs.<nombre> }}`.
+
+**SÍ requiere `id`** en el step que escribe, porque la lectura se hace por id.
+
+```yaml
+steps:
+  - name: Calcular versión
+    id: version                          # ← id OBLIGATORIO para poder leerlo después
+    run: |
+      VERSION="1.4.2"
+      echo "tag=$VERSION" >> $GITHUB_OUTPUT        # formato: nombre=valor
+      echo "fecha=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT  # puedes escribir varios
+
+  - name: Usar la versión
+    run: |
+      # Se accede con: steps.<id>.outputs.<nombre>
+      echo "Versión: ${{ steps.version.outputs.tag }}"
+      echo "Fecha:   ${{ steps.version.outputs.fecha }}"
+
+  - name: Otro step también puede leerlo
+    run: echo "Mismo valor: ${{ steps.version.outputs.tag }}"
+```
+
+> **Alcance**: Solo disponible dentro del **mismo job**. Para pasar valores entre jobs, usar `outputs:` a nivel de job y el contexto `needs`.
+
+---
+
+##### `GITHUB_ENV` — Crear variables de entorno para steps siguientes (NO requiere `id`)
+
+**Propósito**: Que un step **defina una variable de entorno** que estará disponible en **todos los steps siguientes** del mismo job como `$MI_VAR`.
+
+**NO requiere `id`** porque no se accede por nombre de step, simplemente la variable queda disponible en el entorno del runner.
+
+```yaml
+steps:
+  - name: Configurar entorno
+    run: |
+      echo "APP_ENV=production" >> $GITHUB_ENV     # define variable de entorno
+      echo "API_URL=https://api.miapp.com" >> $GITHUB_ENV
+
+  - name: Usar la variable (sin mencionar el step anterior)
+    run: |
+      echo "Entorno: $APP_ENV"        # disponible directamente como var de entorno
+      echo "API: $API_URL"
+
+  - name: También disponible aquí
+    run: echo "Sigue disponible: $APP_ENV"
+```
+
+> **Diferencia clave con `GITHUB_OUTPUT`**:
+> - `GITHUB_OUTPUT` → acceso explícito por id: `${{ steps.mi_step.outputs.valor }}`
+> - `GITHUB_ENV` → acceso directo como variable bash: `$MI_VARIABLE`
+
+---
+
+##### `GITHUB_STEP_SUMMARY` — Escribir un resumen visible en la UI de GitHub
+
+**Propósito**: Generar un **informe en Markdown** que aparece en la pestaña "Summary" de la ejecución del workflow en GitHub. Útil para mostrar resultados de tests, métricas, o cualquier información relevante de forma visual sin tener que buscar en los logs.
+
+```
+Sin GITHUB_STEP_SUMMARY:         Con GITHUB_STEP_SUMMARY:
+┌─────────────────────┐          ┌──────────────────────────────┐
+│ Logs crudos:        │          │ Summary (UI bonita):         │
+│ PASS test1          │          │ ## ✅ Tests: 42 passed        │
+│ PASS test2          │   →      │ ## ❌ Tests: 2 failed         │
+│ FAIL test3          │          │ | Test     | Estado |        │
+│ ...2000 líneas...   │          │ | test1    | ✅     |        │
+└─────────────────────┘          └──────────────────────────────┘
+```
+
+```yaml
+steps:
+  - name: Ejecutar tests
+    run: |
+      # Simular resultado de tests
+      PASSED=38
+      FAILED=2
+      TOTAL=$((PASSED + FAILED))
+
+      # Escribir resumen en Markdown → aparece en la pestaña Summary de GitHub
+      echo "## 🧪 Resultado de Tests" >> $GITHUB_STEP_SUMMARY
+      echo "" >> $GITHUB_STEP_SUMMARY
+      echo "| Métrica | Valor |" >> $GITHUB_STEP_SUMMARY
+      echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+      echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+      echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+      echo "| 📊 Total  | $TOTAL  |" >> $GITHUB_STEP_SUMMARY
+      echo "" >> $GITHUB_STEP_SUMMARY
+
+      if [ $FAILED -gt 0 ]; then
+        echo "⚠️ **Hay tests fallando, revisar antes de mergear**" >> $GITHUB_STEP_SUMMARY
+      else
+        echo "✅ **Todos los tests pasan correctamente**" >> $GITHUB_STEP_SUMMARY
+      fi
+```
+
+> El resumen se acumula: si varios steps escriben en `$GITHUB_STEP_SUMMARY`, todo aparece junto en el Summary del job.
+
+---
+
+##### `GITHUB_PATH` — Añadir directorios al PATH del runner
+
+**Propósito**: Añadir un directorio al `$PATH` del runner para que los **ejecutables que contiene** estén disponibles directamente (sin ruta completa) en todos los steps siguientes.
+
+**Caso de uso típico**: Instalas una herramienta en un directorio personalizado y quieres poder llamarla simplemente por su nombre.
+
+```yaml
+steps:
+  - name: Instalar herramienta personalizada
+    run: |
+      # Descargar e instalar una herramienta en un directorio propio
+      mkdir -p $HOME/.mytools
+      curl -L https://ejemplo.com/mi-herramienta -o $HOME/.mytools/mi-herramienta
+      chmod +x $HOME/.mytools/mi-herramienta
+
+      # Sin GITHUB_PATH, el siguiente step necesitaría: $HOME/.mytools/mi-herramienta
+      # Con GITHUB_PATH, bastará con: mi-herramienta
+      echo "$HOME/.mytools" >> $GITHUB_PATH
+
+  - name: Usar la herramienta (sin ruta completa)
+    run: |
+      mi-herramienta --version    # ✅ funciona porque el dir está en PATH
+      # Sin GITHUB_PATH esto daría: command not found
+
+  - name: También disponible en steps posteriores
+    run: mi-herramienta --help    # ✅ sigue en PATH
+```
+
+**Caso real: instalar una versión específica de Go**
+```yaml
+steps:
+  - name: Instalar Go personalizado
+    run: |
+      wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
+      tar -C $HOME -xzf go1.22.0.linux-amd64.tar.gz
+      echo "$HOME/go/bin" >> $GITHUB_PATH   # ← go, gofmt, etc. disponibles
+
+  - name: Usar Go
+    run: go version    # ✅ encuentra go en PATH
+```
+
+> **Sin `GITHUB_PATH`**: tendrías que hacer `export PATH="$HOME/go/bin:$PATH"` en **cada step** donde lo necesites, porque `export` solo afecta al proceso actual.
+
+---
+
+#### Ejemplo Completo: Explorar Variables Automáticas
+
+```yaml
+jobs:
+  explorar-variables:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mostrar todas las variables automáticas
+        run: |
+          echo "=== IDENTIDAD DEL WORKFLOW ==="
+          echo "Workflow:       $GITHUB_WORKFLOW"
+          echo "Run ID:         $GITHUB_RUN_ID"
+          echo "Run Number:     $GITHUB_RUN_NUMBER"
+          echo "Job:            $GITHUB_JOB"
+
+          echo "=== REPOSITORIO ==="
+          echo "Repo:           $GITHUB_REPOSITORY"
+          echo "Owner:          $GITHUB_REPOSITORY_OWNER"
+          echo "Actor:          $GITHUB_ACTOR"
+
+          echo "=== COMMIT Y RAMA ==="
+          echo "SHA:            $GITHUB_SHA"
+          echo "Ref:            $GITHUB_REF"
+          echo "Ref Name:       $GITHUB_REF_NAME"
+          echo "Ref Type:       $GITHUB_REF_TYPE"
+          echo "Evento:         $GITHUB_EVENT_NAME"
+
+          echo "=== SISTEMA DE ARCHIVOS ==="
+          echo "Workspace:      $GITHUB_WORKSPACE"
+          echo "Temp:           $RUNNER_TEMP"
+          echo "Tool Cache:     $RUNNER_TOOL_CACHE"
+
+          echo "=== RUNNER ==="
+          echo "OS:             $RUNNER_OS"
+          echo "Arch:           $RUNNER_ARCH"
+          echo "Name:           $RUNNER_NAME"
+          echo "Environment:    $RUNNER_ENVIRONMENT"
+
+          echo "=== ARCHIVOS DE COMUNICACIÓN ==="
+          echo "Output file:    $GITHUB_OUTPUT"
+          echo "Env file:       $GITHUB_ENV"
+          echo "Summary file:   $GITHUB_STEP_SUMMARY"
+          echo "Path file:      $GITHUB_PATH"
+
+      - name: Explorar payload del evento
+        run: |
+          echo "=== PAYLOAD DEL EVENTO ==="
+          cat $GITHUB_EVENT_PATH | head -50  # JSON completo del evento
+```
+
+---
+
 ## 7. EXPRESIONES Y MOTOR DE EVALUACIÓN
 
 ### Introducción: El Lenguaje de Programación de GitHub Actions
@@ -3597,6 +3953,7 @@ Job 3 → VM 10.0.1.102 → Destruida después
 - Procesos independientes
 
 ---
+
 
 ## 10. NETWORKING Y COMUNICACIÓN
 
