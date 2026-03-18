@@ -24,12 +24,15 @@ jobs:
           echo "github.repository_owner": "${{github.repository_owner}}
           echo "github.workspace": "${{github.workspace}}
           
+          echo "ref=${{github.ref}}" >> $GITHUB_OUTPUT
           echo "after=${{github.event.after}}" >> $GITHUB_OUTPUT
           echo "before=${{github.event.before}}" >> $GITHUB_OUTPUT
       - name: comparatorInfo
         run: |
-          echo "after > before": "${{steps.getter.outputs.after}} > ${{steps.getter.outputs.before}}"
-          echo "rama contiene: 'feature'": ${{ contains(github.ref, 'feature') }}
-          echo "ref empieza con 'refs/heads/'": ${{ startsWith(github.ref, 'refs/heads/') }}
-          echo "ref empieza con 'refs/heads/'": ${{ endsWith(github.ref, '/main') }}
-          echo "ref empieza con 'refs/heads/'": ${{ format('Version: {0}.{1}', '1', '2') }}
+          echo "after > before": "${{steps.getter.outputs.after > steps.getter.outputs.before}}"
+          echo "rama contiene: 'feature'": ${{ contains(steps.getter.outputs.ref, 'feature') }}
+          echo "ref empieza con 'refs/heads/'": ${{ startsWith(steps.getter.outputs.ref, 'refs/heads/') }}
+          echo "ref endsWith con '/main'": ${{ endsWith(steps.getter.outputs.ref, '/main') }}
+          echo "version": ${{ format('Version: {0}.{1}', '1', '2') }}
+          result=$(ls -lta ${{github.workspace}})
+          echo "ls -lta 'github.workspace' (${{github.workspace}}) = $result"
