@@ -1,0 +1,895 @@
+# 🔒 GitHub Actions: Seguridad Avanzada
+
+## 📚 Índice
+1. [GITHUB_TOKEN: Permisos Detallados](#1-github_token-permisos-detallados)
+2. [Scopes de Secrets](#2-scopes-de-secrets)
+3. [OIDC: Autenticación sin Secretos](#3-oidc-autenticación-sin-secretos)
+4. [pull_request_target: Riesgos y Uso Seguro](#4-pull_request_target-riesgos-y-uso-seguro)
+5. [Pinning de Actions por SHA](#5-pinning-de-actions-por-sha)
+6. [Inyección de Código: Script Injection](#6-inyección-de-código-script-injection)
+7. [Buenas Prácticas de Seguridad](#7-buenas-prácticas-de-seguridad)
+8. [Check Runs y Check Suites](#8-check-runs-y-check-suites)
+9. [Code Scanning con CodeQL](#9-code-scanning-con-codeql)
+10. [actions/github-script](#10-actionsgithub-script)
+11. [Preguntas de Examen](#11-preguntas-de-examen)
+
+---
+
+## 1. GITHUB_TOKEN: Permisos Detallados
+
+El `GITHUB_TOKEN` es un token que **GitHub genera automáticamente** para cada ejecución de workflow. No es un secreto que configuras tú — existe siempre.
+
+### Tabla completa de permisos por scope
+
+| Scope | Descripción | Default (repos públicos) | Default (repos privados) |
+|---|---|---|---|
+| `actions` | Artifacts, workflows | `write` | `read` |
+| `checks` | Check runs, check suites | `write` | `read` |
+| `contents` | Código, releases, branches, tags, commits | `write` | `read` |
+| `deployments` | Deployments | `write` | `read` |
+| `discussions` | Discusiones del repo | `write` | `read` |
+| `id-token` | Token OIDC | `none` | `none` |
+| `issues` | Issues y comentarios | `write` | `read` |
+| `metadata` | Metadatos del repo | `read` | `read` |
+| `packages` | GitHub Packages | `write` | `read` |
+| `pages` | GitHub Pages | `write` | `read` |
+| `pull-requests` | PRs y comentarios | `write` | `read` |
+| `repository-projects` | Proyectos del repo | `write` | `read` |
+| `security-events` | Code Scanning, Dependabot | `write` | `read` |
+| `statuses` | Estado de commits | `write` | `read` |
+
+> ⚠️ **Diferencia crítica**: En eventos desde **forks** o disparados por `pull_request`, el GITHUB_TOKEN tiene permisos muy reducidos por seguridad (solo `read` en la mayoría de scopes).
+
+### Cambiar permisos del GITHUB_TOKEN
+
+```yaml
+# Nivel workflow (aplica a todos los jobs)
+permissions:
+  contents: read       # Solo leer código
+  issues: write        # Puede crear/editar issues
+  pull-requests: write # Puede comentar en PRs
+
+# O reducir a solo-lectura todo
+permissions: read-all
+
+# O dar escritura completa (no recomendado)
+permissions: write-all
+
+# Nivel job (sobreescribe permisos del workflow para ese job)
+jobs:
+  mi-job:
+    permissions:
+      contents: write    # Este job puede escribir código
+      issues: none       # Este job no puede tocar issues
+```
+
+### Usar GITHUB_TOKEN en la práctica
+
+```yaml
+steps:
+  # Opción 1: Directo en run
+  - name: Crear release via API
+    run: |
+      curl -X POST \
+        -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+        -H "Content-Type: application/json" \
+        https://api.github.com/repos/${{ github.repository }}/releases \
+        -d '{"tag_name":"v1.0.0","name":"Release v1.0.0"}'
+  
+  # Opción 2: Como variable de entorno (más seguro)
+  - name: Usar token como env
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    run: gh pr comment ${{ github.event.pull_request.number }} --body "Tests pasaron ✅"
+  
+  # Opción 3: gh cli lo usa automáticamente con GH_TOKEN
+  - name: GitHub CLI
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    run: gh issue list
+```
+
+---
+
+## 2. Scopes de Secrets
+
+Los secrets se pueden definir en tres niveles con diferente alcance:
+
+### Niveles de secrets
+
+```
+┌──────────────────────────────────────────────┐
+│  ORGANIZACIÓN                                │
+│  (disponibles para todos los repos de la org)│
+│                                              │
+│  ┌──────────────────────────────────────┐   │
+│  │  REPOSITORIO                         │   │
+│  │  (disponibles para ese repo)         │   │
+│  │                                      │   │
+│  │  ┌────────────────────────────────┐  │   │
+│  │  │  ENVIRONMENT                   │  │   │
+│  │  │  (solo en jobs con ese env)    │  │   │
+│  │  └────────────────────────────────┘  │   │
+│  └──────────────────────────────────────┘   │
+└──────────────────────────────────────────────┘
+```
+
+### Secrets de Repositorio
+
+Configurados en: **Settings → Secrets and variables → Actions → Secrets**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Token: ${{ secrets.MY_API_TOKEN }}"
+      # Disponible en cualquier job del workflow
+```
+
+### Secrets de Environment
+
+Configurados en: **Settings → Environments → [nombre-env] → Secrets**
+
+```yaml
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    environment: production    # ← Activa este environment
+    steps:
+      - run: echo "Deploy key: ${{ secrets.DEPLOY_KEY }}"
+      # Solo disponible porque el job usa environment: production
+```
+
+Si otro job no tiene `environment: production`, NO puede acceder a `secrets.DEPLOY_KEY` del environment production.
+
+### Secrets de Organización
+
+Configurados en: **Organization Settings → Secrets**
+
+Pueden restringirse a:
+- Todos los repos de la org
+- Repos específicos
+- Solo repos privados
+
+```yaml
+# Acceso igual que los de repositorio
+steps:
+  - run: echo "${{ secrets.ORG_WIDE_TOKEN }}"
+```
+
+### Variables (vars): la contraparte pública
+
+`vars` funciona igual que `secrets` pero **NO está encriptado** (visible en los logs si se hace echo):
+
+```yaml
+# Settings → Secrets and variables → Variables
+jobs:
+  build:
+    environment: staging
+    steps:
+      - run: |
+          echo "ENV: ${{ vars.ENVIRONMENT_NAME }}"    # staging
+          echo "URL: ${{ vars.APP_URL }}"              # https://staging.example.com
+```
+
+---
+
+## 3. OIDC: Autenticación sin Secretos
+
+**OIDC (OpenID Connect)** permite que GitHub Actions se autentique en servicios en la nube (AWS, Azure, GCP) **sin almacenar credenciales como secrets**.
+
+### El problema que resuelve
+
+```
+Sin OIDC:
+1. Crear usuario IAM en AWS con permisos
+2. Generar Access Key + Secret Key
+3. Guardar como secrets en GitHub
+4. Las credenciales no expiran nunca
+5. Si se filtran, acceso permanente
+
+Con OIDC:
+1. Configurar trust policy en AWS (confiar en GitHub)
+2. En el workflow, pedir un token OIDC
+3. AWS verifica que es realmente de GitHub
+4. AWS emite credenciales temporales (15 min)
+5. No hay secretos que guardar ni que puedan filtrarse
+```
+
+### Requisito: Permiso id-token
+
+```yaml
+permissions:
+  id-token: write    # ← OBLIGATORIO para OIDC
+  contents: read
+```
+
+### Ejemplo: AWS con OIDC
+
+**1. Configuración en AWS (una vez):**
+```json
+// Trust policy del IAM Role
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {
+      "Federated": "arn:aws:iam::123456789:oidc-provider/token.actions.githubusercontent.com"
+    },
+    "Action": "sts:AssumeRoleWithWebIdentity",
+    "Condition": {
+      "StringEquals": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:mi-org/mi-repo:ref:refs/heads/main"
+      }
+    }
+  }]
+}
+```
+
+**2. En el workflow:**
+```yaml
+name: Deploy a AWS
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write    # ← Necesario para OIDC
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Autenticarse en AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789:role/GitHubActionsRole
+          aws-region: us-east-1
+          # ← No hay access-key-id ni secret-access-key
+      
+      - name: Deploy
+        run: |
+          aws s3 sync ./dist s3://mi-bucket
+          aws cloudfront create-invalidation --distribution-id XXXXX --paths "/*"
+```
+
+### Ejemplo: Azure con OIDC
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login en Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}       # Solo el ID, no el secreto
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          # ← No hay AZURE_CLIENT_SECRET
+      
+      - name: Deploy
+        run: az webapp deploy --resource-group mi-grupo --name mi-app
+```
+
+### Ejemplo: GCP con OIDC
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Autenticarse en GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/123/locations/global/workloadIdentityPools/my-pool/providers/my-provider'
+          service_account: 'my-service-account@my-project.iam.gserviceaccount.com'
+```
+
+---
+
+## 4. pull_request_target: Riesgos y Uso Seguro
+
+### La diferencia con pull_request
+
+| | `pull_request` | `pull_request_target` |
+|---|---|---|
+| Contexto de ejecución | Código de la **rama del PR** (head) | Código de la **rama destino** (base) |
+| Secrets disponibles | NO (en forks) | SÍ ⚠️ |
+| Permisos GITHUB_TOKEN | read-only (forks) | write ⚠️ |
+| Uso típico | CI tests | Comentar en PRs de forks, deploy previews |
+
+### El riesgo
+
+```yaml
+# ⚠️ PELIGROSO: Ejecuta código del PR con acceso a secrets
+on:
+  pull_request_target:
+
+jobs:
+  dangerous:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4    # ← ¿De qué rama? Del PR (head) por defecto
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}   # ← Código del PR
+      
+      - run: npm test    # ← Ejecuta código del PR CON acceso a secrets = PWNED
+```
+
+Un atacante puede abrir un PR con código malicioso en `npm test` que exfiltra secrets.
+
+### Uso seguro de pull_request_target
+
+```yaml
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  # ✅ SEGURO: Solo hace operaciones que NO ejecutan código del PR
+  comment-on-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      # NO hace checkout del código del PR
+      - name: Comentar en el PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '👋 Gracias por tu contribución! Revisaremos tu PR pronto.'
+            })
+  
+  # ✅ SEGURO: Checkout del HEAD (base), no del PR
+  lint-base:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        # Sin ref: → clona la rama BASE (segura), no el PR
+      - run: npm run lint   # Ejecuta código de base, no del PR
+```
+
+### Patrón seguro para CI en forks: workflow_run
+
+```yaml
+# Workflow 1: CI sin secrets (ejecuta código del PR)
+# .github/workflows/ci.yml
+on:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm test    # Sin secrets, seguro
+
+# Workflow 2: Leer resultados y comentar (con secrets)
+# .github/workflows/comment.yml
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comentar resultado
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const result = context.payload.workflow_run.conclusion
+            // Puede usar secrets aquí, pero NO ejecuta código del PR
+```
+
+---
+
+## 5. Pinning de Actions por SHA
+
+### El problema con los tags
+
+```yaml
+# ⚠️ Potencialmente inseguro
+- uses: actions/checkout@v4         # v4 puede cambiar
+- uses: mi-usuario/mi-action@main   # main cambia con cada commit
+```
+
+Si el autor de una action (tuya o de terceros) compromete el repositorio, un cambio en el tag puede introducir código malicioso.
+
+### Pinning por SHA (recomendado)
+
+```yaml
+# ✅ Seguro: el SHA nunca cambia
+- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+- uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48 # v4.3.0
+```
+
+El SHA del commit es inmutable. Aunque alguien reetiquete `v4`, el SHA no cambia.
+
+### ¿Cómo obtener el SHA?
+
+```bash
+# Ver SHA de un tag específico
+git ls-remote https://github.com/actions/checkout.git refs/tags/v4
+# Output: 11bd71901bbe5b1630ceea73d27597364c9af683  refs/tags/v4
+
+# O en el repositorio de la action, ver el historial del tag
+```
+
+### Herramientas automáticas
+
+- **Dependabot**: Puede actualizar automáticamente los SHAs cuando salen nuevas versiones
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+```
+
+---
+
+## 6. Inyección de Código: Script Injection
+
+### El problema
+
+Valores del contexto pueden contener código si vienen de input externo (títulos de PR, comentarios, etc.):
+
+```yaml
+# ⚠️ VULNERABLE: Inyección de código
+- name: Obtener título del PR
+  run: echo "El título es: ${{ github.event.pull_request.title }}"
+  # Si el título es: hello"; rm -rf /; echo "bye
+  # Se convierte en: echo "El título es: hello"; rm -rf /; echo "bye"
+```
+
+### Solución: Variables de entorno intermedias
+
+```yaml
+# ✅ SEGURO: El valor pasa como variable de entorno, no como código
+- name: Obtener título del PR
+  env:
+    PR_TITLE: ${{ github.event.pull_request.title }}  # ← Variable de entorno
+  run: echo "El título es: $PR_TITLE"    # ← Referencia bash, no expresión
+```
+
+La variable de entorno es siempre un **string**, nunca se interpreta como código bash.
+
+### Valores peligrosos (siempre usar env vars)
+
+```yaml
+# SIEMPRE usar env vars para estos valores:
+env:
+  PR_TITLE: ${{ github.event.pull_request.title }}
+  PR_BODY: ${{ github.event.pull_request.body }}
+  COMMENT: ${{ github.event.comment.body }}
+  BRANCH: ${{ github.head_ref }}
+  # Cualquier campo que venga de input del usuario
+```
+
+---
+
+## 7. Buenas Prácticas de Seguridad
+
+### Resumen de prácticas esenciales
+
+```yaml
+# ✅ 1. Permissions mínimas
+permissions:
+  contents: read
+  # Solo añadir lo necesario
+
+# ✅ 2. Secrets como variables de entorno
+- name: Usar API
+  env:
+    API_KEY: ${{ secrets.API_KEY }}
+  run: curl -H "Auth: $API_KEY" https://api.example.com
+  # ❌ Nunca: curl -H "Auth: ${{ secrets.API_KEY }}" ... (aparece en logs si hay error)
+
+# ✅ 3. Pinning de actions por SHA
+- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+# ✅ 4. Variables de entorno para valores de contexto no confiables
+env:
+  PR_TITLE: ${{ github.event.pull_request.title }}
+
+# ✅ 5. Validar que solo se ejecuta en tu repo (no en forks con secrets)
+if: github.repository == 'mi-usuario/mi-repo'
+
+# ✅ 6. OIDC en vez de credenciales de larga duración
+# (ver sección OIDC arriba)
+
+# ✅ 7. Revisar permisos de Actions de terceros antes de usar
+# (ver sus permisos en action.yml)
+```
+
+### Checklist de seguridad
+
+- [ ] `permissions` está definido con mínimo privilegio
+- [ ] Secrets no se imprimen directamente en `run:` (usar env vars)
+- [ ] Actions de terceros están fijadas por SHA
+- [ ] `pull_request_target` no ejecuta código del fork
+- [ ] Valores de input de usuarios (títulos, comentarios) pasan por env vars
+- [ ] OIDC en lugar de credenciales de larga duración cuando es posible
+- [ ] Dependabot configurado para actualizar actions
+
+---
+
+## 8. Preguntas de Examen
+
+**P: ¿Qué es el GITHUB_TOKEN y quién lo genera?**
+→ Es un token de autenticación generado automáticamente por GitHub para cada ejecución de workflow. No necesitas configurarlo — siempre está disponible en `secrets.GITHUB_TOKEN`.
+
+**P: ¿Qué permiso necesita un workflow para usar OIDC?**
+→ `id-token: write`
+
+**P: ¿Cuál es la diferencia entre `pull_request` y `pull_request_target`?**
+→ `pull_request` ejecuta el código de la rama del PR (head), tiene permisos reducidos en forks. `pull_request_target` ejecuta el código de la rama destino (base) y tiene acceso completo a secrets aunque venga de un fork, por eso es peligroso si se hace checkout del código del PR.
+
+**P: ¿Por qué es más seguro fijar una action por SHA que por tag?**
+→ Los tags pueden ser reetiquetados a otro commit. El SHA es inmutable — el código que referencia un SHA nunca puede cambiar.
+
+**P: ¿Cómo evitar script injection con `github.event.pull_request.title`?**
+→ Pasarlo como variable de entorno en lugar de interpolarlo directamente en el script:
+```yaml
+env:
+  TITLE: ${{ github.event.pull_request.title }}
+run: echo "$TITLE"  # no echo "${{ github.event.pull_request.title }}"
+```
+
+**P: ¿En qué nivel se pueden definir secrets en GitHub?**
+→ En 3 niveles: Organización (disponibles para repos de la org), Repositorio (disponibles para ese repo), y Environment (solo para jobs que usan ese environment).
+
+**P: ¿Qué ventaja tiene OIDC sobre secretos de larga duración?**
+→ No hay secretos que almacenar ni que puedan filtrarse. Las credenciales son temporales (≈15 min). Se puede restringir por rama/repo/org en la trust policy del proveedor cloud.
+
+---
+
+## 8. Check Runs y Check Suites
+
+### ¿Qué son?
+
+Cuando GitHub Actions ejecuta un workflow, crea automáticamente objetos en la API de GitHub:
+
+```
+git push → GitHub Events → Workflow Run
+                               │
+                    ┌──────────┴──────────┐
+                    ▼                     ▼
+             Check Suite           Check Suite
+             (por workflow)        (por otra tool)
+                    │
+          ┌─────────┼─────────┐
+          ▼         ▼         ▼
+       Check Run  Check Run  Check Run
+       (job lint) (job test) (job build)
+```
+
+- **Check Suite**: agrupa todos los check runs de un commit para una app (ej: GitHub Actions)
+- **Check Run**: resultado individual de un job — tiene estado (`queued`, `in_progress`, `completed`) y conclusión (`success`, `failure`, `neutral`, `cancelled`, `skipped`, `timed_out`, `action_required`)
+
+### Relación con Branch Protection Rules
+
+Los Check Runs son la base de los **status checks requeridos**:
+
+```
+Settings → Branches → Branch protection rules → Require status checks
+  ✅ CI / lint         ← nombre del job en el workflow
+  ✅ CI / test
+  ✅ CI / build
+```
+
+Si alguno falla → no se puede mergear el PR.
+
+> El nombre que aparece en Branch Protection es `{nombre-workflow} / {nombre-job}`.
+
+### Crear Check Runs manualmente
+
+Se puede crear un Check Run desde un workflow para integrar herramientas externas:
+
+```yaml
+- name: Crear check run
+  uses: actions/github-script@v7
+  with:
+    script: |
+      await github.rest.checks.create({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        name: 'Mi herramienta externa',
+        head_sha: context.sha,
+        status: 'completed',
+        conclusion: 'success',
+        output: {
+          title: 'Análisis completado',
+          summary: 'No se encontraron problemas'
+        }
+      })
+```
+
+---
+
+## 9. Code Scanning con CodeQL
+
+CodeQL es el análisis de seguridad estático de GitHub. Encuentra vulnerabilidades en el código fuente (SQL injection, XSS, etc.) y publica los resultados como alertas de seguridad en el repositorio.
+
+### Workflow autogenerado por GitHub
+
+GitHub puede generar automáticamente el workflow al activar Code Scanning:
+
+```yaml
+# .github/workflows/codeql.yml
+name: "CodeQL Analysis"
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '30 1 * * 0'   # Análisis semanal (domingos a la 1:30 UTC)
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    
+    permissions:
+      security-events: write   # ← Necesario para publicar alertas SARIF
+      actions: read
+      contents: read
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python]
+        # Lenguajes disponibles: c-cpp, csharp, go, java-kotlin,
+        #                        javascript-typescript, python, ruby, swift
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # queries: +security-extended   # Añadir queries adicionales
+      
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+        # Para lenguajes compilados (C, Java): intenta compilar automáticamente
+        # Para interpretados (Python, JS): no necesita build
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          # Los resultados se publican como SARIF en Security → Code scanning alerts
+```
+
+### Resultados SARIF
+
+CodeQL publica los resultados en formato **SARIF** (Static Analysis Results Interchange Format):
+
+```
+Repositorio → Security → Code scanning alerts
+  ⚠️ SQL Injection en src/db.js:45
+  ⚠️ XSS en src/render.js:23
+```
+
+También se pueden publicar resultados SARIF de otras herramientas:
+
+```yaml
+- name: Publicar resultados de otra herramienta
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
+```
+
+### Permisos necesarios
+
+```yaml
+permissions:
+  security-events: write   # ← Para publicar alertas SARIF
+```
+
+---
+
+## 10. actions/github-script
+
+`actions/github-script` permite escribir JavaScript directamente en el YAML del workflow para interactuar con la API de GitHub (Octokit) sin necesidad de crear una action separada.
+
+### ¿Cuándo usar github-script vs gh CLI?
+
+| | `actions/github-script` | `gh` CLI |
+|---|---|---|
+| **Sintaxis** | JavaScript (Octokit) | Shell / CLI |
+| **Complejidad** | Lógica compleja, condicionales JS | Operaciones simples |
+| **API** | REST + GraphQL completo | Solo comandos disponibles en gh |
+| **Outputs** | `return valor` → `steps.id.outputs.result` | `echo "..." >> $GITHUB_OUTPUT` |
+| **Mejor para** | Manipulación de datos, múltiples llamadas API | Comandos puntuales |
+
+### Sintaxis básica
+
+```yaml
+- uses: actions/github-script@v7
+  with:
+    script: |
+      // 'github' = cliente Octokit autenticado con GITHUB_TOKEN
+      // 'context' = contexto del workflow (repo, sha, actor, etc.)
+      // 'core' = @actions/core (outputs, logging)
+      // 'exec' = ejecutar comandos shell
+      // 'io' = operaciones de filesystem
+      
+      const result = await github.rest.issues.list({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        state: 'open'
+      })
+      core.setOutput('count', result.data.length)
+```
+
+### Operaciones más comunes
+
+**Comentar en un PR:**
+```yaml
+- uses: actions/github-script@v7
+  with:
+    script: |
+      await github.rest.issues.createComment({
+        issue_number: context.issue.number,
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        body: `✅ Deploy completado por @${context.actor}`
+      })
+```
+
+**Añadir/quitar labels:**
+```yaml
+- uses: actions/github-script@v7
+  with:
+    script: |
+      // Añadir label
+      await github.rest.issues.addLabels({
+        issue_number: context.issue.number,
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        labels: ['reviewed', 'ready-to-merge']
+      })
+      
+      // Quitar label
+      await github.rest.issues.removeLabel({
+        issue_number: context.issue.number,
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        name: 'in-review'
+      })
+```
+
+**Crear un issue:**
+```yaml
+- uses: actions/github-script@v7
+  with:
+    script: |
+      await github.rest.issues.create({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        title: `❌ Build fallido - Run #${context.runNumber}`,
+        body: `Ver: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+        labels: ['bug', 'ci']
+      })
+```
+
+**Usar GraphQL:**
+```yaml
+- uses: actions/github-script@v7
+  with:
+    script: |
+      const query = `
+        query($owner: String!, $repo: String!) {
+          repository(owner: $owner, name: $repo) {
+            issues(states: OPEN) { totalCount }
+          }
+        }
+      `
+      const result = await github.graphql(query, {
+        owner: context.repo.owner,
+        repo: context.repo.repo
+      })
+      return result.repository.issues.totalCount
+```
+
+**Obtener el resultado de `return` como output:**
+```yaml
+- id: mis-datos
+  uses: actions/github-script@v7
+  with:
+    result-encoding: string   # 'string' o 'json'
+    script: |
+      return 'mi-valor'
+
+- run: echo "Resultado: ${{ steps.mis-datos.outputs.result }}"
+```
+
+**Token personalizado (para acceso cross-repo):**
+```yaml
+- uses: actions/github-script@v7
+  with:
+    github-token: ${{ secrets.MI_PAT }}   # PAT en vez de GITHUB_TOKEN
+    script: |
+      // Puede acceder a otros repos
+      await github.rest.issues.create({
+        owner: 'otra-org',
+        repo: 'otro-repo',
+        title: 'Notificación cross-repo'
+      })
+```
+
+---
+
+## 11. Preguntas de Examen
+
+**P: ¿Qué es un Check Run y cómo se relaciona con GitHub Actions?**
+→ Un Check Run es el resultado de un job individual en la API de GitHub. GitHub Actions crea automáticamente uno por cada job. Son la base de los status checks requeridos en branch protection rules.
+
+**P: ¿Qué permiso necesita GITHUB_TOKEN para publicar alertas de Code Scanning (SARIF)?**
+→ `security-events: write`
+
+**P: ¿Para qué sirve CodeQL y cómo se integra en un workflow?**
+→ CodeQL es el motor de análisis estático de GitHub que busca vulnerabilidades de seguridad en el código fuente. Se integra con tres actions: `github/codeql-action/init@v3`, `github/codeql-action/autobuild@v3` y `github/codeql-action/analyze@v3`. Los resultados se publican como alertas en la pestaña Security.
+
+**P: ¿Qué trigger además de `push` y `pull_request` se recomienda en el workflow de CodeQL y por qué?**
+→ `schedule` (cron semanal). Porque permite detectar vulnerabilidades nuevas en código que no ha cambiado (cuando se descubren nuevas queries de CodeQL), sin necesitar un push.
+
+**P: ¿Cuándo usar `actions/github-script` en lugar de `gh` CLI?**
+→ Cuando necesitas lógica JavaScript compleja, múltiples llamadas a la API, acceso a GraphQL, o quieres capturar el valor de retorno directamente como output del step.
+
+**P: ¿Cómo obtener el resultado de return en `actions/github-script` como output del step?**
+→ La action escribe automáticamente el valor retornado en `steps.<id>.outputs.result`. Se puede controlar la codificación con `result-encoding: string` o `result-encoding: json`.
+
+**P: ¿Qué es GITHUB_TOKEN?**
+→ Es un token de autenticación generado automáticamente por GitHub para cada ejecución de workflow. No necesitas configurarlo — siempre está disponible en `secrets.GITHUB_TOKEN`.
+
+**P: ¿Qué permiso necesita un workflow para usar OIDC?**
+→ `id-token: write`
+
+**P: ¿Cuál es la diferencia entre `pull_request` y `pull_request_target`?**
+→ `pull_request` ejecuta el código de la rama del PR (head), tiene permisos reducidos en forks. `pull_request_target` ejecuta el código de la rama destino (base) y tiene acceso completo a secrets aunque venga de un fork, por eso es peligroso si se hace checkout del código del PR.
+
+**P: ¿Por qué es más seguro fijar una action por SHA que por tag?**
+→ Los tags pueden ser reetiquetados a otro commit. El SHA es inmutable — el código que referencia un SHA nunca puede cambiar.
+
+**P: ¿Cómo evitar script injection con `github.event.pull_request.title`?**
+→ Pasarlo como variable de entorno en lugar de interpolarlo directamente en el script:
+```yaml
+env:
+  TITLE: ${{ github.event.pull_request.title }}
+run: echo "$TITLE"  # no echo "${{ github.event.pull_request.title }}"
+```
+
+**P: ¿En qué nivel se pueden definir secrets en GitHub?**
+→ En 3 niveles: Organización (disponibles para repos de la org), Repositorio (disponibles para ese repo), y Environment (solo para jobs que usan ese environment).
+
+**P: ¿Qué ventaja tiene OIDC sobre secretos de larga duración?**
+→ No hay secretos que almacenar ni que puedan filtrarse. Las credenciales son temporales (≈15 min). Se puede restringir por rama/repo/org en la trust policy del proveedor cloud.
