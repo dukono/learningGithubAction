@@ -81,6 +81,67 @@ jobs:
 
 > ⚠️ **Error común**: Usar `$GITHUB_ENV` y esperar leer con `steps.id.outputs.key`. `GITHUB_ENV` solo crea variables de entorno bash, no outputs accesibles entre jobs.
 
+### Outputs con valores multilínea
+
+El formato `key=value` en una sola línea no funciona si el valor contiene saltos de línea. Para valores multilínea se usa un delimitador:
+
+```yaml
+- name: Output multilínea
+  id: datos
+  run: |
+    # Formato heredoc: EOF puede ser cualquier string único
+    echo "json<<EOF" >> $GITHUB_OUTPUT
+    echo '{"status":"ok","count":42}' >> $GITHUB_OUTPUT
+    echo "EOF" >> $GITHUB_OUTPUT
+
+- name: Usar el output
+  run: echo '${{ steps.datos.outputs.json }}'
+  # Imprime: {"status":"ok","count":42}
+```
+
+### Límites de outputs
+
+- **Tamaño máximo por output**: 1 MB
+- **Número máximo de outputs por step/job**: sin límite documentado oficial, pero outputs muy grandes degradan el rendimiento
+- **Outputs de jobs de matrix**: cada combinación de matrix expone sus propios outputs; no se pueden agregar automáticamente — hay que usar artifacts para consolidar resultados de múltiples combinaciones
+
+```yaml
+# ⚠️ Este patrón NO funciona para agregar outputs de matrix
+jobs:
+  test:
+    strategy:
+      matrix:
+        env: [dev, staging, prod]
+    outputs:
+      # Solo el último job de la matrix que termine escribe aquí
+      # → resultado no determinista si varios escriben la misma key
+      result: ${{ steps.r.outputs.result }}
+```
+
+```yaml
+# ✅ Para agregar resultados de matrix → usar artifacts
+jobs:
+  test:
+    strategy:
+      matrix:
+        env: [dev, staging, prod]
+    steps:
+      - id: r
+        run: echo "result=ok" >> $GITHUB_OUTPUT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ matrix.env }}
+          path: result.txt
+
+  aggregate:
+    needs: test
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: result-*     # ← Descarga todos los artifacts del pattern
+          merge-multiple: true  # ← Los fusiona en un solo directorio
+```
+
 ### GITHUB_STEP_SUMMARY
 
 Genera un resumen visual en la UI de GitHub Actions:
@@ -187,6 +248,41 @@ jobs:
 # cancel-in-progress: false  
 # Workflow nuevo → ESPERA en cola a que termine el anterior
 # Útil para: deploy a producción (no queremos saltarnos versiones)
+```
+
+### Patrón avanzado: cancelar CI pero no deploy
+
+Si tu workflow tiene jobs de CI (cancelables) y de deploy (no cancelables), usa `concurrency` a nivel de **job**, no de workflow:
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: true    # ← El test anterior se cancela
+    steps:
+      - run: npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-${{ github.ref }}
+      cancel-in-progress: false   # ← El deploy anterior NO se cancela
+    steps:
+      - run: ./deploy.sh
+```
+
+### Trampa: concurrency y el `github.head_ref`
+
+En un `pull_request`, `github.ref` es `refs/pull/N/merge` — única por PR. Pero si el grupo usa `github.head_ref` (nombre de la rama), dos PRs de la misma rama compartirían grupo de concurrencia. Usar `github.ref` es más seguro:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}   # ✅ Único por PR
+  # group: ${{ github.workflow }}-${{ github.head_ref }}  # ⚠️ Puede colisionar
+  cancel-in-progress: true
 ```
 
 ---
@@ -444,6 +540,58 @@ strategy:
     version: ${{ fromJSON(needs.prev-job.outputs.versions) }}
 ```
 
+### Matrix solo con `include` (sin variables base)
+
+`include` puede usarse **sin** definir variables base cuando cada combinación es completamente diferente y no tiene sentido el producto cartesiano:
+
+```yaml
+strategy:
+  matrix:
+    include:
+      - name: "Test Chrome"
+        browser: chrome
+        os: ubuntu-latest
+      - name: "Test Firefox"
+        browser: firefox
+        os: ubuntu-latest
+      - name: "Test Safari"
+        browser: safari
+        os: macos-latest
+```
+
+### Nombre personalizado del job en la UI con matrix
+
+Por defecto el job aparece como `test (18)`, `test (20)`, etc. Puedes personalizar el nombre:
+
+```yaml
+jobs:
+  test:
+    name: "Tests en Node ${{ matrix.node }} / ${{ matrix.os }}"  # ← Nombre en UI
+    strategy:
+      matrix:
+        node: ['18', '20']
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+```
+
+### `continue-on-error` por combinación en matrix
+
+Puedes marcar combinaciones específicas como experimentales que no bloqueen el resultado global:
+
+```yaml
+strategy:
+  matrix:
+    node: ['18', '20', '22']
+    include:
+      - node: '22'
+        experimental: true   # ← Propiedad extra
+jobs:
+  test:
+    continue-on-error: ${{ matrix.experimental == true }}  # ← Solo falla si no es experimental
+    strategy:
+      matrix: ...
+```
+
 ---
 
 ## 5. Containers y Services
@@ -483,6 +631,96 @@ jobs:
 - Necesitas una versión específica de una herramienta
 - Quieres reproducibilidad exacta del entorno
 - Usas herramientas que no están en ubuntu-latest
+
+### Container con registry privado
+
+Si la imagen no es pública (Docker Hub privado, Artifactory, GHCR privado), hay que autenticarse **antes** de que GitHub intente hacer pull. Esto se hace con `credentials:` dentro de `container:`:
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/mi-org/mi-imagen:latest        # ← Imagen privada
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}        # ← Para GHCR
+      # Para Artifactory u otro registry privado:
+      # credentials:
+      #   username: ${{ secrets.ARTIFACTORY_USER }}
+      #   password: ${{ secrets.ARTIFACTORY_TOKEN }}
+    steps:
+      - run: echo "corriendo en imagen privada"
+```
+
+> ⚠️ Sin `credentials:`, el job falla con `pull access denied` si la imagen es privada. El `GITHUB_TOKEN` solo sirve para `ghcr.io` — para otros registries necesitas secrets propios.
+
+### Container con volumes
+
+Puedes montar directorios del runner dentro del container:
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-alpine
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock  # ← Docker-in-Docker
+        - ${{ github.workspace }}:/app               # ← Montar el workspace
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm test
+```
+
+### Alternativa: docker compose directamente en steps
+
+Cuando necesitas orquestar múltiples contenedores con configuración compleja (redes personalizadas, depends_on, tu propio `docker-compose.yml`), usa `docker compose` como comando en steps en lugar de `services:`:
+
+```yaml
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login al registry privado (si las imágenes son privadas)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io                          # o tu registry
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Arrancar servicios
+        run: docker compose up -d
+
+      - name: Esperar a que estén listos
+        run: |
+          timeout 120 bash -c 'until docker compose ps | grep -q "healthy"; do sleep 3; done'
+          # O para un servicio específico:
+          # docker compose exec db pg_isready
+
+      - name: Ejecutar tests
+        run: npm test
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+
+      - name: Logs en caso de fallo
+        if: failure()
+        run: docker compose logs
+
+      - name: Limpieza
+        if: always()
+        run: docker compose down -v
+```
+
+| Usar `services:` | Usar `docker compose` |
+|---|---|
+| Imágenes públicas simples (postgres, redis) | Tu propio `docker-compose.yml` ya existe |
+| No tienes `docker-compose.yml` | Imágenes de registry privado con credenciales |
+| Quieres health check automático integrado | Necesitas `depends_on`, redes, configs complejas |
 
 ### Services: Dependencias externas (DB, Redis, etc.)
 
@@ -531,6 +769,23 @@ jobs:
 ```
 
 > 💡 **Hostname del servicio**: Si el job NO usa container, el hostname es `localhost`. Si el job SÍ usa container, el hostname es el nombre del servicio (`postgres`, `redis`).
+
+> ⚠️ **`ports:` solo es necesario sin `container:`**: Cuando el job usa `container:`, los servicios están en la misma red Docker y son accesibles directamente por nombre — no hace falta mapear puertos al host. Los `ports:` solo son necesarios cuando el job corre directamente en el runner (sin `container:`), para exponer el puerto del contenedor al host.
+
+### Services con registry privado
+
+Al igual que en `container:`, si la imagen del service es privada se necesita `credentials:`:
+
+```yaml
+services:
+  mi-app:
+    image: ghcr.io/mi-org/mi-servicio:latest
+    credentials:
+      username: ${{ github.actor }}
+      password: ${{ secrets.GITHUB_TOKEN }}
+    ports:
+      - 8080:8080
+```
 
 ### Container + Services juntos
 
@@ -650,6 +905,38 @@ steps:
   - name: Paso con timeout
     timeout-minutes: 5        # ← El step falla si supera 5 min
     run: sleep 400             # Este paso fallará a los 5 min
+```
+
+> 💡 **Timeout por defecto**: Si no especificas `timeout-minutes`, el límite por defecto de GitHub es **6 horas** por job. Para workflows de runners self-hosted el límite sube a **35 días**. Siempre es buena práctica definirlo explícitamente para detectar bucles infinitos o cuelgues.
+
+### `continue-on-error` a nivel de job y su efecto en `needs`
+
+Cuando un job tiene `continue-on-error: true` y falla, los jobs dependientes **sí se ejecutan**, pero `needs.job.result` devuelve `failure` — no `success`. Esto es distinto de `skipped`:
+
+```yaml
+jobs:
+  flaky-job:
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 1   # Falla, pero el workflow continúa
+
+  next-job:
+    needs: flaky-job
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "${{ needs.flaky-job.result }}"
+          # Imprime "failure" — NO "success"
+          # continue-on-error no cambia el result del job, solo permite continuar
+```
+
+```
+continue-on-error: true en un job →
+  ✅ Los jobs dependientes SE ejecutan
+  ⚠️ needs.job.result sigue siendo "failure"
+  ✅ El workflow completo se marca como exitoso
 ```
 
 ### continue-on-error
@@ -785,6 +1072,102 @@ jobs:
 | `cancelled` | El job fue cancelado |
 | `skipped` | El job fue omitido (su `if:` fue false) |
 
+### Trampa: `needs` + `if: always()` y el resultado `skipped`
+
+Cuando un job tiene `if: always()` y depende de otro que fue **skipped**, el resultado de `needs.job.result` es `skipped` — no `success`. Esto provoca errores silenciosos si no se tiene en cuenta:
+
+```yaml
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'   # ← Solo en main
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm run build
+
+  notify:
+    needs: build
+    if: always()                           # ← Siempre ejecutar
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Resultado: ${{ needs.build.result }}"
+          # En una rama feature: imprime "skipped", no "success" ni "failure"
+          # ← Hay que contemplar "skipped" en la lógica
+```
+
+```yaml
+# ✅ Patrón correcto: contemplar los 3 casos posibles
+notify:
+  needs: build
+  if: always()
+  steps:
+    - if: needs.build.result == 'success'
+      run: echo "✅ Build OK"
+    - if: needs.build.result == 'failure'
+      run: echo "❌ Build falló"
+    - if: needs.build.result == 'skipped'
+      run: echo "⏭️ Build no ejecutado (rama no es main)"
+```
+
+### `needs` transitivo: acceder a outputs de jobs no directos
+
+Un job solo puede leer outputs de los jobs que declara explícitamente en su `needs:`. Si `C` depende de `B` que depende de `A`, `C` **no puede** leer `needs.A.outputs` a menos que también declare `needs: [A, B]`:
+
+```yaml
+jobs:
+  A:
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    ...
+
+  B:
+    needs: A
+    ...
+
+  C:
+    needs: [A, B]           # ← Debe declarar A explícitamente
+    steps:
+      - run: echo "${{ needs.A.outputs.version }}"   # ✅ Funciona
+      # Si solo fuera needs: B → needs.A.outputs.version estaría vacío ❌
+```
+
+### Fan-out: un job dispara múltiples en paralelo
+
+```yaml
+jobs:
+  build:                          # ← 1 job de entrada
+    runs-on: ubuntu-latest
+    outputs:
+      artifact: ${{ steps.b.outputs.name }}
+    steps:
+      - id: b
+        run: echo "name=app.zip" >> $GITHUB_OUTPUT
+
+  deploy-eu:                      # ← Paralelo
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploy EU con ${{ needs.build.outputs.artifact }}"
+
+  deploy-us:                      # ← Paralelo
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploy US con ${{ needs.build.outputs.artifact }}"
+
+  deploy-ap:                      # ← Paralelo
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploy AP con ${{ needs.build.outputs.artifact }}"
+
+  smoke-tests:                    # ← Espera a los 3 deploys
+    needs: [deploy-eu, deploy-us, deploy-ap]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Todos los deploys listos"
+```
+
 ---
 
 ## 9. Preguntas de Examen
@@ -812,4 +1195,28 @@ jobs:
 
 **P: ¿Cuándo hay que poner comillas en un `if:`?**
 → Cuando la expresión empieza con `!` (NOT lógico), porque YAML lo interpreta como tag de tipo. Ejemplo: `if: "!cancelled()"`
+
+**P: ¿Cómo autenticarse para usar una imagen privada en `container:` o `services:`?**
+→ Con `credentials: { username: ..., password: ... }` dentro del bloque `container:` o del service. Para GHCR usar `github.actor` y `secrets.GITHUB_TOKEN`. Para otros registries (Artifactory, etc.) usar secrets propios.
+
+**P: ¿Por qué no hacen falta `ports:` en un service cuando el job usa `container:`?**
+→ Porque el job y los services comparten la misma red Docker interna. Los services son accesibles por su nombre (hostname). `ports:` solo es necesario sin `container:`, para exponer el puerto al runner host.
+
+**P: ¿Qué resultado tiene `needs.job.result` cuando ese job fue saltado (`if:` era false)?**
+→ `skipped`. Hay que contemplar este caso en jobs con `if: always()` que dependen de jobs condicionales.
+
+**P: ¿Puede el job C leer `needs.A.outputs` si solo declara `needs: B` y B depende de A?**
+→ No. C debe declarar explícitamente `needs: [A, B]` para poder acceder a los outputs de A.
+
+**P: ¿Qué ocurre con `needs.job.result` cuando el job tiene `continue-on-error: true` y falla?**
+→ El valor sigue siendo `failure`. `continue-on-error` permite que el workflow continúe y se marque como exitoso globalmente, pero no cambia el valor de `result` del job.
+
+**P: ¿Cómo escribir un output multilínea en `$GITHUB_OUTPUT`?**
+→ Usando formato heredoc: `echo "key<<EOF" >> $GITHUB_OUTPUT`, luego el valor, luego `echo "EOF" >> $GITHUB_OUTPUT`.
+
+**P: ¿Cuál es el timeout por defecto de un job si no se especifica `timeout-minutes`?**
+→ 6 horas en GitHub-hosted runners. 35 días en self-hosted runners.
+
+**P: ¿Puede una matrix usar `include` sin definir variables base?**
+→ Sí. `include` sin variables base permite definir combinaciones completamente independientes, útil cuando las combinaciones no forman un producto cartesiano.
 
