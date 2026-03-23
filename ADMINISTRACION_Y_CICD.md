@@ -385,6 +385,18 @@ jobs:
 
 ### release-please: releases automáticos por tipo de commit
 
+**Commits convencionales** es una convención de formato para los mensajes de commit: `tipo: descripción`. Los tipos más comunes son `feat` (nueva funcionalidad), `fix` (corrección de bug) y `chore`/`docs` (mantenimiento sin cambio funcional). Un `!` después del tipo indica un cambio incompatible (`feat!:`).
+
+Esta convención permite a herramientas como `release-please` **leer el historial de commits y decidir automáticamente** qué versión publicar siguiente (semver: MAJOR.MINOR.PATCH) sin intervención manual:
+
+```
+feat: nueva funcionalidad     → bump MINOR  (1.0.0 → 1.1.0)
+fix: corrección de bug        → bump PATCH  (1.0.0 → 1.0.1)
+feat!: cambio incompatible    → bump MAJOR  (1.0.0 → 2.0.0)
+chore: mantenimiento          → sin release
+docs: documentación           → sin release
+```
+
 `release-please` analiza los commits convencionales (`feat:`, `fix:`, `chore:`) y:
 1. Crea/actualiza automáticamente un PR de release con el CHANGELOG generado
 2. Al mergearlo, crea el tag semver y el GitHub Release
@@ -519,6 +531,19 @@ jobs:
 ## 7. Docker Avanzado
 
 ### Multi-stage build para reducir tamaño
+
+Cuando construyes una imagen Docker para una aplicación Node.js, necesitas el compilador, todas las `devDependencies`, el código fuente y las herramientas de build durante la compilación — pero en producción solo necesitas el resultado compilado (`dist/`) y las dependencias de runtime. Si usas un único `FROM`, la imagen final incluye todo ese peso innecesario: fácilmente 800 MB–1 GB.
+
+Un **multi-stage build** usa varios bloques `FROM` en el mismo Dockerfile. Cada bloque es un "stage" independiente. El stage final solo copia lo que necesita de los stages anteriores. El resultado: una imagen de producción ligera (~100–200 MB) sin código fuente ni herramientas de desarrollo, con menor superficie de ataque.
+
+```
+Sin multi-stage:
+  imagen = compilador + devDeps + fuentes + build + runtime → ~800 MB
+
+Con multi-stage:
+  stage builder → solo se usa durante la construcción, se descarta
+  stage production → solo dist/ + runtime deps                → ~150 MB
+```
 
 ```dockerfile
 # Dockerfile multi-stage

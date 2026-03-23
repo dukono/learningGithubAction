@@ -453,6 +453,10 @@ updates:
 
 ## 6. Inyección de Código: Script Injection
 
+Cuando usas `${{ github.event.pull_request.title }}` directamente dentro de un bloque `run:`, GitHub sustituye la expresión **antes** de enviar el script al runner, como si fuera concatenación de strings. Si el valor contiene caracteres especiales de bash (comillas, punto y coma, paréntesis), el shell los interpreta como código.
+
+El riesgo es real porque el título de un PR, el cuerpo de un comentario o el nombre de una rama los puede escribir **cualquier usuario externo** que abra un PR o commente en el repositorio.
+
 ### El problema
 
 Valores del contexto pueden contener código si vienen de input externo (títulos de PR, comentarios, etc.):
@@ -569,6 +573,10 @@ run: echo "$TITLE"  # no echo "${{ github.event.pull_request.title }}"
 
 ## 8. Check Runs y Check Suites
 
+Los **Check Runs** son la representación visible en GitHub del resultado de cada job: los ticks verdes o cruces rojas que aparecen en un PR bajo "Checks". Cuando configuras **Branch protection rules** que exigen que ciertos checks pasen antes de poder mergear, estás usando Check Runs.
+
+Normalmente GitHub Actions los crea automáticamente — no necesitas hacer nada. Esta sección es relevante si quieres **integrar herramientas externas** (linters, scanners, sistemas de CI externos) publicando sus resultados como Check Runs en GitHub, o si necesitas **crear anotaciones** (líneas del código marcadas con advertencias o errores directamente en el diff del PR).
+
 ### ¿Qué son?
 
 Cuando GitHub Actions ejecuta un workflow, crea automáticamente objetos en la API de GitHub:
@@ -633,6 +641,10 @@ Se puede crear un Check Run desde un workflow para integrar herramientas externa
 ## 9. Code Scanning con CodeQL
 
 CodeQL es el análisis de seguridad estático de GitHub. Encuentra vulnerabilidades en el código fuente (SQL injection, XSS, etc.) y publica los resultados como alertas de seguridad en el repositorio.
+
+**Cómo funciona**: CodeQL compila o parsea el código fuente y construye una base de datos de su estructura (flujo de datos, llamadas a funciones, uso de variables). Luego ejecuta **queries** escritas en el lenguaje QL que buscan patrones de vulnerabilidades conocidas. Los resultados se publican en `Security → Code scanning alerts` como anotaciones en el código.
+
+Para lenguajes interpretados (Python, JavaScript) el análisis es directo. Para lenguajes compilados (C, Java, C#) CodeQL necesita compilar el código — por eso existe el step `autobuild` que intenta compilarlo automáticamente, o puedes reemplazarlo con tus propios comandos de build.
 
 ### Workflow autogenerado por GitHub
 

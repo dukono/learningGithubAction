@@ -13,7 +13,11 @@
 
 ## 1. Tipos de Actions
 
-Una **action** es una unidad reutilizable de código que se puede usar en steps con `uses:`.
+Una **action** es una unidad reutilizable de código que se puede usar en steps con `uses:`. Cuando escribes `uses: actions/checkout@v4` en un step, estás usando una action publicada en GitHub.
+
+Las actions encapsulan lógica repetible —instalar dependencias, autenticarse en un cloud, publicar artefactos— detrás de una interfaz clara de `inputs` y `outputs` declarada en un archivo `action.yml`. En lugar de copiar los mismos 20 pasos en 5 workflows distintos, creas una action y la llamas con `uses:` en cada uno.
+
+La diferencia con un **workflow reutilizable** es el nivel de operación: una action trabaja a nivel de **step** (se usa dentro de un job), mientras que un workflow reutilizable trabaja a nivel de **job** completo.
 
 | Tipo | Tecnología | Velocidad | Dónde corre | Cuándo usar |
 |---|---|---|---|---|
@@ -292,6 +296,10 @@ run();
 
 ### Compilar para producción
 
+Cuando GitHub ejecuta una JavaScript action, descarga el repositorio de la action al runner. El runner **no ejecuta `npm install`** automáticamente — solo ejecuta el archivo indicado en `main:` del `action.yml`. Por eso hay que usar `@vercel/ncc`: empaqueta el código fuente y todas sus dependencias de `node_modules` en un **único archivo `dist/index.js`**. Ese archivo es el que el runner puede ejecutar directamente sin necesitar ninguna dependencia instalada.
+
+Por eso el directorio `dist/` debe hacerse **commit** en el repositorio de la action (aunque normalmente se ignora en proyectos normales).
+
 ```bash
 # Instalar @vercel/ncc para compilar todo en un solo archivo
 npm install @vercel/ncc --save-dev
@@ -347,6 +355,10 @@ await core.summary.addHeading('Título').addRaw('contenido').write()
 ## 4. Docker Actions
 
 La action corre dentro de un contenedor Docker. Permite usar cualquier lenguaje.
+
+**Flujo de ejecución**: cuando el runner encuentra un step con una Docker action, construye la imagen Docker (si `image: 'Dockerfile'`) o la descarga (si es una imagen pública), crea un contenedor, monta el directorio de trabajo del runner dentro del contenedor, y ejecuta el `ENTRYPOINT`. Los inputs del `action.yml` se pasan como argumentos al entrypoint (listados en `args:`). Las variables de entorno de GitHub (`GITHUB_OUTPUT`, `GITHUB_WORKSPACE`, etc.) están disponibles dentro del contenedor porque el runner las inyecta automáticamente.
+
+> ⚠️ Las Docker actions **no funcionan en runners de Windows** de GitHub porque Docker no está disponible en esos runners.
 
 ### Estructura
 

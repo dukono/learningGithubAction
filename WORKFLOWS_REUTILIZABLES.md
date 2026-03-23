@@ -364,7 +364,9 @@ jobs:
 
 ## 7. Limitaciones Importantes
 
-Estas limitaciones son frecuentes en exámenes:
+Los workflows reutilizables funcionan como funciones llamadas remotamente: el caller **cede el control** al callee, que corre sus propios jobs en sus propios runners, y devuelve el control con sus outputs cuando termina. Esta arquitectura impone límites técnicos: el callee es un proceso separado que no tiene acceso al entorno del caller (variables de entorno, contexto de ejecución, etc.) salvo lo que se le pase explícitamente como `inputs` o `secrets`.
+
+Las limitaciones siguientes son frecuentes en exámenes y reflejan estos límites arquitecturales:
 
 ### 7.1 Anidamiento máximo: 4 niveles
 

@@ -30,6 +30,8 @@
 
 ## 2. Cheatsheet de Sintaxis
 
+> Sintaxis exacta lista para copiar. Si necesitas entender **por qué** funciona algo, ve al documento correspondiente del índice de arriba.
+
 ### Estructura mínima
 
 ```yaml
@@ -200,6 +202,8 @@ if: always()      # siempre, sin importar el resultado
 
 ## 3. Flujos de Datos: Esquemas Visuales
 
+> Úsalos cuando necesites recordar **en qué dirección viajan los datos** y qué mecanismo usar en cada caso (outputs, artifacts, caché, caller/callee).
+
 ```
 STEP → STEP (mismo job)
   echo "k=v" >> $GITHUB_OUTPUT  (step con id: A)
@@ -234,6 +238,8 @@ CALLER → CALLEE → CALLER
 ---
 
 ## 4. Errores Comunes y Soluciones
+
+> Los 10 errores más frecuentes en GitHub Actions. Si tu workflow falla y no sabes por qué, revisa primero esta lista.
 
 **1. `steps.id.outputs.key` vacío**
 ```yaml
@@ -337,6 +343,8 @@ Caller → Callee1 → Callee2 → Callee3 → Callee4 → ❌ ERROR (máx 4 niv
 
 ## 5. Tablas Comparativas
 
+> Para los conceptos que se confunden entre sí. Consultar cuando necesitas elegir entre dos opciones y recordar sus diferencias clave.
+
 ### Cache vs Artifacts
 
 | | Cache | Artifacts |
@@ -389,6 +397,8 @@ Caller → Callee1 → Callee2 → Callee3 → Callee4 → ❌ ERROR (máx 4 niv
 ---
 
 ## 6. Preguntas Tipo Certificación
+
+> Preguntas organizadas por tema. Las respuestas son concisas y orientadas al examen — para la explicación completa consulta el documento correspondiente.
 
 ### Fundamentos
 

@@ -247,9 +247,17 @@ jobs:
 
 ### `pull_request_target`
 
-Similar a `pull_request` pero se ejecuta en el contexto de la rama base (no la del PR).
+Cuando un PR viene de un **fork** (un repositorio ajeno), el evento `pull_request` ejecuta el workflow usando el código de la rama del PR — código externo que no controlas. Por seguridad, GitHub le da permisos muy reducidos y sin acceso a los secrets del repositorio.
 
-**⚠️ IMPORTANTE:** Tiene acceso a secretos incluso si el PR viene de un fork.
+`pull_request_target` resuelve el caso en que necesitas acceso a secrets (por ejemplo, para comentar en el PR usando el `GITHUB_TOKEN` con permisos de escritura), pero **a cambio cambia el contexto de ejecución**: el workflow corre usando el código de la **rama destino (base)**, no el del PR. Así el código externo del fork no puede ejecutarse con tus credenciales.
+
+| | `pull_request` | `pull_request_target` |
+|---|---|---|
+| Código que se ejecuta | Rama del PR (head) | Rama destino (base) |
+| Acceso a secrets | ❌ No (en forks) | ✅ Sí ⚠️ |
+| GITHUB_TOKEN | Solo lectura (forks) | Escritura ⚠️ |
+
+**⚠️ IMPORTANTE:** Tiene acceso a secretos incluso si el PR viene de un fork. Por eso **nunca hagas checkout del código del PR** en este evento sin validación explícita — ver `SEGURIDAD_AVANZADA.md`.
 
 **Uso seguro:**
 ```yaml
@@ -517,6 +525,16 @@ jobs:
 
 ### `workflow_run`
 
+Cada archivo `.yml` en `.github/workflows/` es un workflow independiente. El mecanismo `needs:` solo funciona para encadenar **jobs dentro del mismo workflow**, no entre workflows distintos. `workflow_run` cubre ese caso: permite que un workflow se dispare cuando **otro workflow completo termina**.
+
+El uso más habitual es el patrón CI seguro para forks: un primer workflow ejecuta los tests con el código del fork (sin secrets), y cuando termina, `workflow_run` dispara un segundo workflow que tiene acceso a secrets y puede comentar el resultado en el PR, sin haber ejecutado código externo.
+
+```
+workflow_run vs needs:
+  needs:        → encadena jobs del MISMO workflow
+  workflow_run  → encadena WORKFLOWS distintos (archivos .yml distintos)
+```
+
 Se dispara cuando otro workflow se completa.
 
 ```yaml
@@ -691,6 +709,10 @@ jobs:
 
 ### `workflow_dispatch`
 
+Permite lanzar un workflow **manualmente** desde la interfaz de GitHub (pestaña Actions → seleccionar workflow → botón "Run workflow"), o desde la API REST de GitHub. Es el equivalente a tener un botón de "ejecutar" en la UI.
+
+Los `inputs` definen un formulario que aparece en esa pantalla: el usuario puede elegir valores antes de lanzar la ejecución. Son opcionales — si no se definen, simplemente se puede lanzar el workflow sin parámetros.
+
 Permite ejecutar workflows manualmente desde GitHub UI.
 
 ```yaml
@@ -757,6 +779,10 @@ jobs:
 
 ### `repository_dispatch`
 
+Permite disparar un workflow desde **fuera de GitHub** mediante una llamada HTTP a la API REST. Es útil para integraciones con sistemas externos (Jenkins, un webhook de tu servidor, un script de CI/CD externo) que necesiten desencadenar un workflow de GitHub.
+
+El `event_type` es un identificador personalizado que tú defines — no es un evento predefinido de GitHub, sino un nombre libre que acuerdas entre el llamador externo y el workflow. El `client_payload` es un objeto JSON libre que puedes usar para pasar datos al workflow.
+
 Permite disparar workflows desde la API de GitHub.
 
 ```yaml
@@ -793,6 +819,10 @@ jobs:
 ## Eventos de Workflows
 
 ### `workflow_call`
+
+Hace que un workflow sea **reutilizable**: otro workflow puede llamarlo como si fuera una función, pasándole inputs y recibiendo outputs. El workflow con `workflow_call` no se puede disparar directamente por un evento de GitHub — solo puede ser invocado por otro workflow con `uses:` a nivel de job.
+
+Ver `WORKFLOWS_REUTILIZABLES.md` para la documentación completa de inputs, outputs, secrets y limitaciones.
 
 Para workflows reutilizables.
 

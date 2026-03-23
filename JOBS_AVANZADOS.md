@@ -450,6 +450,17 @@ strategy:
 
 ### Jobs en contenedores
 
+Un **contenedor Docker** es un entorno de ejecución aislado y reproducible que empaqueta una aplicación junto con todas sus dependencias (sistema operativo, bibliotecas, herramientas). En GitHub Actions, en lugar de ejecutar los steps directamente sobre el runner, puedes indicarle al job que corra dentro de un contenedor.
+
+El atributo `image:` indica qué imagen Docker usar. Una **imagen** es una plantilla que define el sistema de archivos y el entorno del contenedor. El valor proviene de un **registry de imágenes**: por defecto Docker Hub (el registro público de Docker). Por ejemplo, `node:20-alpine` significa: imagen oficial de Node.js, versión 20, variante Alpine Linux (ligera).
+
+```
+Formato: nombre:tag
+  node:20-alpine       → Docker Hub, imagen "node", tag "20-alpine"
+  postgres:15          → Docker Hub, imagen "postgres", tag "15"
+  ghcr.io/org/img:v1  → GitHub Container Registry (registry alternativo)
+```
+
 En lugar de ejecutar en el sistema del runner directamente, el job corre dentro de un contenedor Docker:
 
 ```yaml
@@ -474,6 +485,12 @@ jobs:
 - Usas herramientas que no están en ubuntu-latest
 
 ### Services: Dependencias externas (DB, Redis, etc.)
+
+**Services** son contenedores Docker que se arrancan automáticamente **antes** de que empiecen los steps del job y se eliminan cuando el job termina. Sirven para levantar bases de datos, caches u otros procesos externos que tus tests necesitan, sin tener que instalarlos manualmente en el runner.
+
+Cada servicio tiene un **nombre** (la clave bajo `services:`), que actúa como hostname de red para conectarse a él. El atributo `image:` funciona igual que en `container:`: nombre de imagen Docker Hub u otro registry.
+
+Las **`options`** de health check son fundamentales: GitHub Actions esperará a que el contenedor esté *listo* (no solo *arrancado*) antes de ejecutar el primer step. Sin health check el job podría intentar conectarse a la DB antes de que esté lista y fallar.
 
 Los services corren como contenedores Docker **auxiliares** accesibles desde el job:
 

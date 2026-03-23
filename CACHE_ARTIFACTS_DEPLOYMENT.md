@@ -298,12 +298,11 @@ GitHub Container Registry (ghcr.io) permite almacenar imágenes Docker en GitHub
 
 ## 5. GitHub Packages (GHCR)
 
----
+Un **container registry** es un servidor donde se almacenan y distribuyen imágenes Docker, del mismo modo que npm almacena paquetes JavaScript o PyPI almacena paquetes Python. En lugar de construir la imagen en cada máquina que la necesite, se construye una vez, se sube al registry, y cualquier máquina o job puede descargarla.
 
-```
-        uses: actions/deploy-pages@v4
-        id: deployment
-      - name: Deploy
+**GHCR (GitHub Container Registry, `ghcr.io`)** es el registry de GitHub integrado con el repositorio: los permisos de acceso a la imagen siguen los permisos del repo, la autenticación usa el mismo `GITHUB_TOKEN`, y las imágenes aparecen en la pestaña "Packages" del repo.
+
+GitHub Container Registry (`ghcr.io`) permite almacenar imágenes Docker en GitHub.
       
           path: dist/
         with:
@@ -497,6 +496,10 @@ Un **environment** es una configuración de despliegue con:
 
 ## 3. Environments y Protection Rules
 
+Un **environment** en GitHub Actions representa un destino de despliegue (desarrollo, staging, producción). Su propósito es separar la configuración y los permisos por entorno, añadir controles antes de desplegar, y registrar el historial de deployments.
+
+Sin environments, cualquier job puede acceder a todos los secrets del repositorio. Con environments, puedes restringir que ciertos secrets (como la clave de producción) solo sean accesibles para jobs que declaren `environment: production`, y además requerir aprobación manual antes de que ese job se ejecute.
+
 ---
 
 ```
@@ -604,6 +607,20 @@ jobs:
 ### ¿En qué se diferencia de la caché?
 
 ## 2. Artifacts: Compartir Archivos entre Jobs
+
+Cada job en GitHub Actions corre en una **máquina virtual o contenedor nuevo**, completamente aislado. El filesystem de un job **no se comparte** con otros jobs del mismo workflow — cuando el job termina, todo lo que creó desaparece.
+
+Los **artifacts** son la solución: permiten subir archivos al almacenamiento de GitHub al final de un job y descargarlos en otro job posterior. Así, por ejemplo, el job `build` puede compilar la aplicación, subir el directorio `dist/` como artifact, y el job `deploy` puede descargarlo para desplegarlo.
+
+```
+Sin artifacts:
+  Job build  → genera dist/ → VM se destruye → dist/ desaparece
+  Job deploy → ¿de dónde saca el build? → ❌ No puede
+
+Con artifacts:
+  Job build  → genera dist/ → upload-artifact → guardado en GitHub
+  Job deploy → download-artifact → tiene dist/ → ✅ puede desplegar
+```
 
 ---
 

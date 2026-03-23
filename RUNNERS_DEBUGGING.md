@@ -13,6 +13,10 @@
 
 ## 1. GitHub-Hosted Runners
 
+Un **runner** es la máquina (física o virtual) donde se ejecutan los jobs de un workflow. Cuando un job empieza, GitHub crea una máquina virtual nueva, descarga el código del repositorio (si hay `actions/checkout`), ejecuta todos los steps, y destruye la máquina al finalizar. Cada job tiene su propia máquina limpia — no comparte estado con otros jobs.
+
+**GitHub-hosted runners** son máquinas gestionadas completamente por GitHub: GitHub las crea, las mantiene actualizadas con herramientas preinstaladas, y las destruye tras cada uso. No requieren ninguna configuración por parte del usuario. Se seleccionan con `runs-on:` usando un label predefinido.
+
 ### Tipos de runners disponibles
 
 | Label | Sistema Operativo | CPU | RAM | Disco |
@@ -256,6 +260,17 @@ run: |
 ---
 
 ## 5. Debugging: Encontrar y Resolver Errores
+
+Cuando un workflow falla, los logs se consultan en la pestaña **Actions** del repositorio → seleccionar la ejecución → expandir el job y el step que falló. Los logs tienen dos niveles de detalle:
+
+- **Logs normales**: lo que imprimen los steps (`run:`) y los mensajes de GitHub Actions. Suficiente para la mayoría de errores.
+- **Debug logging**: logs internos del runner y de cada action (normalmente ocultos). Se activa cuando el error no es evidente en los logs normales — por ejemplo, cuando una action falla sin mensaje claro o cuando hay problemas de conectividad o permisos en el runner.
+
+Los tipos de error más frecuentes son:
+- **Error en el comando** (`exit code != 0`): ver el output del step fallido.
+- **Expresión evaluada incorrectamente**: activar debug y volcar contextos con `toJSON(github)`.
+- **Permiso denegado** (API, secrets): revisar `permissions:` del job y el scope del `GITHUB_TOKEN`.
+- **Herramienta no encontrada**: la herramienta no está preinstalada en el runner; hay que instalarla antes.
 
 ### Habilitar debug logging
 

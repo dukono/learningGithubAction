@@ -15,6 +15,10 @@
 
 ## 💬 Sintaxis de Expresiones
 
+Las **expresiones** son fragmentos de código evaluados por los servidores de GitHub **antes** de que el job llegue al runner. Cuando GitHub procesa el archivo YAML del workflow, sustituye cada `${{ }}` por su valor calculado. Esto significa que el runner nunca ve la expresión en sí — ya recibe el valor resuelto.
+
+Se pueden usar en casi cualquier campo del workflow: `if:`, `run:`, `env:`, `with:`, `name:`, etc. Combinan acceso a **contextos** (objetos con datos del evento, el job, el runner…) con **funciones** y **operadores**.
+
 ### Uso básico
 
 Las expresiones se escriben con `${{ }}`:
@@ -169,6 +173,8 @@ Se ejecuta solo si el workflow fue cancelado.
 - if: steps.test.outcome == 'failure'
   run: echo "Los tests fallaron"
 ```
+
+> **`outcome` vs `conclusion` en un step**: cuando un step tiene `continue-on-error: true` y falla, el workflow lo "perdona" y sigue adelante. `outcome` refleja lo que realmente pasó (`failure`), mientras que `conclusion` refleja lo que el workflow considera que pasó (`success`). Usa `outcome` cuando necesites saber el resultado real; usa `conclusion` para saber si el workflow continuó o no.
 
 ---
 
@@ -348,7 +354,9 @@ ${{ github.event.pull_request.head.repo.full_name }}
 
 ### `hashFiles(path, ...)`
 
-Calcula hash SHA-256 de archivos (útil para cache).
+Calcula una huella digital (hash SHA-256) del **contenido** de uno o varios archivos. El resultado es siempre el mismo para el mismo contenido, y cambia si cambia cualquier byte del archivo.
+
+Su uso principal es generar **claves de caché que se invalidan automáticamente** cuando cambian las dependencias. Por ejemplo: si `package-lock.json` no ha cambiado entre dos ejecuciones, el hash es idéntico → se reutiliza la caché. Si se añade o actualiza un paquete, el hash cambia → se descarta la caché y se reinstalan las dependencias.
 
 ```yaml
 # Hash de un archivo

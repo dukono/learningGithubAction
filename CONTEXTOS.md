@@ -1,5 +1,26 @@
 # GitHub Actions: Contextos y Variables Completas
 
+## ¿Qué es un contexto?
+
+Un **contexto** es un objeto JSON que GitHub inyecta automáticamente en cada ejecución de workflow. Contiene información sobre el evento que lo disparó, el repositorio, el job en curso, el runner, los secrets configurados, etc. Se accede a sus propiedades dentro de expresiones `${{ }}`.
+
+Existen múltiples contextos separados —en lugar de uno único— porque cada uno tiene un **ámbito y disponibilidad distintos**: algunos solo existen dentro de un step concreto (`steps`), otros solo cuando hay una matrix (`matrix`), otros solo en workflows llamados (`inputs`). Esta separación también evita colisiones de nombres entre, por ejemplo, una variable de entorno (`env.VERSION`) y un output de un step (`steps.build.outputs.version`).
+
+```
+${{ github.ref }}           → información del evento y repositorio
+${{ env.MI_VAR }}           → variables de entorno del workflow
+${{ job.status }}           → estado actual del job
+${{ steps.id.outputs.key }} → outputs de un step anterior
+${{ runner.os }}            → sistema operativo del runner
+${{ secrets.TOKEN }}        → secrets configurados
+${{ vars.CONFIG }}          → variables de configuración (no secretas)
+${{ matrix.version }}       → valor actual de la celda en una matrix
+${{ needs.job.outputs.x }}  → outputs de jobs de los que dependemos
+${{ inputs.param }}         → inputs de workflow_dispatch o workflow_call
+```
+
+---
+
 ## Índice
 1. [Contexto `github`](#contexto-github)
    - [Eventos Específicos por Trigger](#eventos-específicos)
