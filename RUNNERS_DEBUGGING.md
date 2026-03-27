@@ -7,7 +7,11 @@
 4. [GitHub CLI (gh) en Workflows](#4-github-cli-gh-en-workflows)
 5. [Debugging: Encontrar y Resolver Errores](#5-debugging-encontrar-y-resolver-errores)
 6. [act: Ejecutar Workflows Localmente](#6-act-ejecutar-workflows-localmente)
-7. [Preguntas de Examen](#7-preguntas-de-examen)
+7. [Larger Runners y GPU Runners](#7-larger-runners-y-gpu-runners)
+8. [IP Allowlists para Self-Hosted Runners](#8-ip-allowlists-para-self-hosted-runners)
+9. [JIT Runners (Just-in-Time)](#9-jit-runners-just-in-time)
+10. [Gestión de Ejecuciones de Workflows](#10-gestión-de-ejecuciones-de-workflows)
+11. [Preguntas de Examen](#11-preguntas-de-examen)
 
 ---
 
@@ -643,7 +647,356 @@ En el workflow se puede sobreescribir por artifact:
 
 ---
 
-## 9. Preguntas de Examen
+## 7. Larger Runners y GPU Runners
+
+Los **larger runners** son máquinas con más recursos que los runners estándar (2 CPU / 7 GB RAM). Están disponibles en planes Team y Enterprise.
+
+### Especificaciones de larger runners (Linux/Windows)
+
+| Label | CPU | RAM | Disco | Notas |
+|---|---|---|---|---|
+| `ubuntu-latest` / `ubuntu-22.04` | 2 | 7 GB | 14 GB | Estándar (incluido en todos los planes) |
+| `ubuntu-latest-4-cores` | 4 | 16 GB | 14 GB | Requiere plan Team/Enterprise |
+| `ubuntu-latest-8-cores` | 8 | 32 GB | 300 GB | Requiere plan Team/Enterprise |
+| `ubuntu-latest-16-cores` | 16 | 64 GB | 600 GB | Requiere plan Team/Enterprise |
+| `ubuntu-latest-32-cores` | 32 | 128 GB | 1200 GB | Requiere plan Team/Enterprise |
+| `ubuntu-latest-64-cores` | 64 | 256 GB | 2040 GB | Requiere plan Team/Enterprise |
+| `windows-latest-8-cores` | 8 | 32 GB | 300 GB | Requiere plan Team/Enterprise |
+
+### GPU Runners
+
+Disponibles solo en **GitHub Enterprise Cloud**:
+
+| Label | GPU | CPU | RAM |
+|---|---|---|---|
+| `gpu-nvidia-t4-linux-medium` | 1x NVIDIA T4 (16 GB VRAM) | 4 | 28 GB |
+
+**Casos de uso:** inferencia de modelos ML, procesamiento de imágenes/vídeo, compilación de shaders.
+
+### Cómo usar larger runners
+
+```yaml
+jobs:
+  build-heavy:
+    runs-on: ubuntu-latest-16-cores    # Larger runner
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -j16                  # Compilación paralela con 16 cores
+
+  ml-inference:
+    runs-on: gpu-nvidia-t4-linux-medium  # GPU runner
+    steps:
+      - uses: actions/checkout@v4
+      - run: python inference.py
+```
+
+### Facturación de larger runners
+
+Los larger runners tienen un coste por minuto proporcional al número de cores (Linux):
+
+| Runner | Multiplicador de coste |
+|---|---|
+| 2-core (estándar) | 1x |
+| 4-core | 2x |
+| 8-core | 4x |
+| 16-core | 8x |
+| 32-core | 16x |
+| 64-core | 32x |
+
+> Los repos **públicos** usan runners estándar de forma gratuita. Los larger runners en repos públicos requieren configuración especial y plan Enterprise.
+
+---
+
+## 8. IP Allowlists para Self-Hosted Runners
+
+Las **IP allowlists** a nivel de organización o empresa permiten restringir qué IPs pueden comunicarse con la API de GitHub para registrar runners o recibir jobs.
+
+### ¿Para qué sirve?
+
+```
+SIN allowlist:
+  Cualquier IP puede registrar un runner y recibir jobs de la org
+
+CON allowlist:
+  Solo las IPs/rangos definidos pueden comunicarse con GitHub Actions
+  → Self-hosted runners en datacenter propio: añadir IPs del datacenter
+  → Previene que runners no autorizados reciban jobs sensibles
+```
+
+### Configuración
+
+```
+Organization Settings → Security → IP allow list
+→ Add IP address or range
+   - Formato: IP única (192.168.1.1) o CIDR (10.0.0.0/8)
+   - Descripción: nombre descriptivo
+
+Enterprise Settings → Security → IP allow list
+→ Misma interfaz, aplica a toda la enterprise
+```
+
+### Comportamiento con GitHub-hosted runners
+
+Si activas IP allowlist en una org con repos que usan **GitHub-hosted runners**, debes añadir los rangos de IPs de GitHub:
+
+```bash
+# Obtener los rangos actuales de GitHub Actions:
+curl https://api.github.com/meta | jq '.actions'
+# Retorna rangos CIDR que cambian periódicamente
+```
+
+> ⚠️ Los rangos de IPs de GitHub-hosted runners **cambian periódicamente**. Si activas IP allowlist, deberías automatizar la actualización de los rangos con un workflow que llame a la API de GitHub meta, o usar self-hosted runners exclusivamente.
+
+### Casos de uso habituales
+
+1. **Entornos regulados (finanzas, salud):** solo los runners en la red corporativa pueden ejecutar jobs
+2. **Compliance:** auditoría requiere que el código solo se procese en infraestructura controlada
+3. **Seguridad perimetral:** combinado con VPN para que los runners accedan a recursos internos
+
+---
+
+## 9. JIT Runners (Just-in-Time)
+
+### ¿Qué son los JIT runners?
+
+Los **JIT runners** (Just-in-Time) son runners que se registran usando un token de uso único generado por API, en lugar del flujo tradicional de `config.sh + run.sh`. Esto los hace más seguros porque el token nunca se almacena en el sistema ni se reutiliza.
+
+```
+Flujo tradicional:
+  1. Generar token de registro (válido 1 hora)
+  2. ./config.sh --token AAA...  → guarda configuración en disco
+  3. ./run.sh                    → runner registrado, escucha jobs
+  Token queda en archivos de configuración locales
+
+Flujo JIT:
+  1. API genera token efímero (corta duración, un solo uso)
+  2. Token se pasa directamente al binario del runner
+  3. Runner se registra, ejecuta un job y se da de baja
+  Token nunca se persiste en disco
+```
+
+### Diferencia entre `--ephemeral` y JIT
+
+Aunque ambos ejecutan un único job y luego se eliminan, hay una diferencia importante en cómo se registran:
+
+| Característica | `--ephemeral` | JIT |
+|---|---|---|
+| Registro | `config.sh` con token estándar (1h de validez) | API genera token efímero de corta duración |
+| Token en disco | Sí (archivos de configuración) | No |
+| Caso de uso | Runners que se registran con antelación | Autoscaling: el orchestrator genera el token justo antes de provisionar la VM |
+| Seguridad del token | Token estándar puede ser copiado | Token solo válido para un único registro |
+
+### API para generar un JIT runner token
+
+```bash
+# Endpoint: POST /repos/{owner}/{repo}/actions/runners/generate-jit-config
+curl -X POST \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github+json" \
+  https://api.github.com/repos/OWNER/REPO/actions/runners/generate-jit-config \
+  -d '{
+    "name": "jit-runner-001",
+    "runner_group_id": 1,
+    "labels": ["self-hosted", "linux", "jit"],
+    "work_folder": "_work"
+  }'
+```
+
+**Respuesta de la API:**
+
+```json
+{
+  "runner": {
+    "id": 42,
+    "name": "jit-runner-001",
+    "os": "linux",
+    "status": "offline"
+  },
+  "encoded_jit_config": "eyJhbGciOi..."   // ← Runner config encoded en base64
+}
+```
+
+El campo `encoded_jit_config` se pasa directamente al runner:
+
+```bash
+# El orchestrator extrae el token y provisiona la VM
+JIT_CONFIG=$(echo $API_RESPONSE | jq -r '.encoded_jit_config')
+
+# En la VM nueva, iniciar el runner con el token JIT
+./run.sh --jitconfig "$JIT_CONFIG"
+# El runner se registra, ejecuta el job, y se elimina solo
+```
+
+### Ciclo de vida JIT en autoscaling
+
+```
+Orchestrator (Kubernetes, Lambda, etc.)
+    │
+    ├─ Detecta job en cola
+    │
+    ├─ Llama a: POST /repos/.../runners/generate-jit-config
+    │   └─ Obtiene encoded_jit_config (token de corta duración)
+    │
+    ├─ Provisiona VM/pod nuevo con el token
+    │
+    └─ VM: ./run.sh --jitconfig "TOKEN"
+          ├─ Se registra en GitHub (token se consume, ya no válido)
+          ├─ Ejecuta el job
+          └─ Se destruye
+```
+
+### Ventajas de seguridad de JIT
+
+- **Token de un solo uso:** aunque el token sea interceptado antes de usarse, expira rápidamente y solo puede usarse para registrar un runner (no para hacer operaciones arbitrarias)
+- **Sin estado persistente:** el runner no guarda credenciales en disco
+- **Ideal para entornos de alto riesgo:** el orchestrator tiene el control total del ciclo de vida
+- **Trazabilidad:** cada runner JIT tiene un nombre y ID únicos que permiten auditar qué jobs ejecutó
+
+### Comparativa: persistente vs efímero vs JIT
+
+| | Persistente | Efímero (`--ephemeral`) | JIT |
+|---|---|---|---|
+| Duración | Indefinida (hasta baja manual) | Un job, luego se da de baja | Un job, token de un solo uso |
+| Registro | `config.sh` + `run.sh` | `config.sh --ephemeral` + `run.sh` | API + `run.sh --jitconfig` |
+| Token en disco | Sí | Sí (hasta que termina) | No |
+| Estado entre jobs | Puede acumular estado | Estado limpio | Estado limpio |
+| Uso recomendado | Dev, CI estable | Runners autogestionados | Autoscaling moderno (ARC, Kubernetes) |
+| Nivel de seguridad | Bajo | Medio | Alto |
+
+---
+
+## 10. Gestión de Ejecuciones de Workflows
+
+### Re-ejecutar workflows
+
+Cuando un job falla (o simplemente quieres volver a ejecutarlo), GitHub permite re-ejecutar sin hacer un nuevo push. Los re-runs **siempre usan el mismo SHA y ref** que el run original — no ejecutan código más reciente.
+
+> Los re-runs están disponibles hasta **30 días** después del run inicial.
+
+**Desde la UI:**
+
+```
+Actions → [workflow run] → "Re-run all jobs"       ← Todos los jobs
+                         → "Re-run failed jobs"    ← Solo los fallidos
+```
+
+**Con GitHub CLI:**
+
+```bash
+# Re-run todos los jobs de un run
+gh run rerun RUN_ID
+
+# Re-run solo los jobs que fallaron
+gh run rerun RUN_ID --failed
+
+# Re-run un job específico (obtener JOB_ID con gh run view RUN_ID)
+gh run rerun --job JOB_ID
+
+# Re-run con debug logging activado
+gh run rerun RUN_ID --debug
+```
+
+> En la UI, al hacer "Re-run jobs" hay un checkbox "Enable debug logging" — equivalente al flag `--debug` del CLI.
+
+### Cancelar workflows
+
+```bash
+# Desde la UI: botón "Cancel workflow" en la ejecución en curso
+
+# Con CLI:
+gh run cancel RUN_ID
+
+# Ver runs en curso para obtener el RUN_ID:
+gh run list --status in_progress
+```
+
+### Deshabilitar y habilitar workflows
+
+Deshabilitar un workflow impide que se dispare por eventos (push, PR, schedule, etc.), pero el archivo `.yml` permanece en el repositorio. El workflow queda en estado `disabled_manually`.
+
+**Desde la UI:**
+
+```
+Actions → [seleccionar workflow en la barra lateral] → "..." (menú) → "Disable workflow"
+Actions → [seleccionar workflow] → "..." → "Enable workflow"
+```
+
+**Con CLI:**
+
+```bash
+# Deshabilitar (se puede usar el nombre del archivo o el nombre del workflow)
+gh workflow disable ci.yml
+gh workflow disable "CI Pipeline"
+
+# Habilitar
+gh workflow enable ci.yml
+gh workflow enable "CI Pipeline"
+
+# Ver estado de todos los workflows
+gh workflow list
+```
+
+**Auto-deshabilitación por inactividad:**
+
+Los workflows con trigger `schedule` se deshabilitan automáticamente si no hay actividad (commits, PRs) en el repositorio durante **60 días**. GitHub envía un email de aviso antes. Para reactivarlos, basta con hacer un commit o habilitarlos manualmente.
+
+### Ver y descargar logs
+
+```bash
+# Ver logs de un run completo en la terminal
+gh run view RUN_ID --log
+
+# Ver solo los logs de los jobs/steps fallidos
+gh run view RUN_ID --log-failed
+
+# Ver información del run (estado, duración, jobs)
+gh run view RUN_ID
+
+# Listar runs recientes
+gh run list
+gh run list --workflow ci.yml
+gh run list --branch main --status failure
+```
+
+**Desde la UI:** dentro del log de cualquier job hay un botón de descarga (icono de engranaje o rueda) para descargar los logs completos del job como archivo `.zip`.
+
+### Status badges
+
+Los badges de estado muestran el resultado del último run de un workflow en el README u otras páginas.
+
+**URL del badge:**
+
+```
+https://github.com/{owner}/{repo}/actions/workflows/{workflow-file}.yml/badge.svg
+```
+
+**Parámetro `?branch=` para rama específica:**
+
+```
+https://github.com/mi-org/mi-repo/actions/workflows/ci.yml/badge.svg?branch=main
+```
+
+**Markdown para el README:**
+
+```markdown
+![CI](https://github.com/mi-org/mi-repo/actions/workflows/ci.yml/badge.svg)
+
+![CI en main](https://github.com/mi-org/mi-repo/actions/workflows/ci.yml/badge.svg?branch=main)
+```
+
+**Desde la UI (generador automático):**
+
+```
+Actions → [seleccionar workflow] → "..." → "Create status badge"
+```
+
+GitHub genera el snippet de Markdown listo para copiar.
+
+> Los badges muestran el estado del workflow completo (no de un job individual). Si hay varios workflows en el repo, cada uno tiene su propio badge.
+
+---
+
+## 11. Preguntas de Examen
 
 **P: ¿Cuánto consume en minutos un job de 10 minutos en macOS (repo privado)?**
 → 100 minutos (multiplicador x10).
@@ -668,4 +1021,52 @@ En el workflow se puede sobreescribir por artifact:
 
 **P: ¿Qué diferencia hay entre `ubuntu-latest` y `ubuntu-22.04` en `runs-on`?**
 → `ubuntu-latest` apunta a la versión más reciente de Ubuntu disponible y puede cambiar. `ubuntu-22.04` siempre apunta a Ubuntu 22.04 — más reproducible y predecible.
+
+**P: ¿Qué plan de GitHub se necesita para usar larger runners (`ubuntu-latest-8-cores`)?**
+→ Plan Team o Enterprise. Los runners estándar de 2-core están disponibles en todos los planes.
+
+**P: ¿Cuánto cuesta en minutos un job de 10 minutos en un runner de 16 cores Linux (repo privado)?**
+→ 80 minutos (multiplicador 8x por los 16 cores).
+
+**P: ¿Cómo se referencia un larger runner en `runs-on`?**
+→ Con su label predefinido: `runs-on: ubuntu-latest-8-cores`. Para larger runners self-hosted con labels personalizados: `runs-on: [self-hosted, linux, large-memory]`.
+
+**P: ¿Para qué se usa la IP allowlist en GitHub Actions y qué problema genera con GitHub-hosted runners?**
+→ Para restringir qué IPs pueden comunicarse con la org/enterprise en GitHub. El problema con GitHub-hosted runners es que sus IPs cambian periódicamente y hay que mantener la allowlist actualizada (consultando `https://api.github.com/meta`).
+
+**P: ¿En qué plan están disponibles los GPU runners de GitHub?**
+→ Solo en GitHub Enterprise Cloud (label: `gpu-nvidia-t4-linux-medium`).
+
+**P: ¿Qué diferencia hay entre un runner con `--ephemeral` y un JIT runner?**
+→ Ambos ejecutan un solo job. La diferencia es el registro: `--ephemeral` usa `config.sh` con un token estándar que queda en archivos de configuración en disco. JIT usa una API que genera un token de corta duración que se pasa directamente al runner — el token nunca se persiste en disco y solo es válido para un único registro.
+
+**P: ¿Qué endpoint de la API genera un token JIT?**
+→ `POST /repos/{owner}/{repo}/actions/runners/generate-jit-config`. Devuelve un `encoded_jit_config` en base64 que se pasa a `./run.sh --jitconfig`.
+
+**P: ¿Por qué los JIT runners son más seguros que los efímeros?**
+→ El token de registro nunca se almacena en disco, es de corta duración y solo válido para un único registro. Aunque fuera interceptado, expira antes de que pueda reutilizarse.
+
+**P: ¿En qué escenario típico se usan los JIT runners?**
+→ Autoscaling con Kubernetes u otros orchestrators: el orchestrator detecta un job en cola, llama a la API para obtener el token JIT, provisiona una VM/pod nueva con ese token, el runner ejecuta el job y se destruye.
+
+**P: ¿Los re-runs ejecutan el código más reciente del branch?**
+→ No. Los re-runs siempre usan el mismo SHA y ref que el run original, sin importar si hay commits nuevos en el branch.
+
+**P: ¿Hasta cuándo se puede re-ejecutar un workflow run?**
+→ Hasta 30 días después del run inicial.
+
+**P: ¿Cómo re-ejecutar solo los jobs fallidos de un run con CLI?**
+→ `gh run rerun RUN_ID --failed`.
+
+**P: ¿Qué ocurre con el archivo `.yml` de un workflow cuando se deshabilita?**
+→ El archivo permanece en el repositorio. Solo se impide que el workflow se dispare por eventos. El estado queda como `disabled_manually`.
+
+**P: ¿Cuándo se auto-deshabilita un workflow con trigger `schedule`?**
+→ Cuando no hay actividad en el repositorio durante 60 días.
+
+**P: ¿Cómo activar debug logging al re-ejecutar un run con CLI?**
+→ `gh run rerun RUN_ID --debug`.
+
+**P: ¿Cuál es la URL del status badge de un workflow?**
+→ `https://github.com/{owner}/{repo}/actions/workflows/{workflow}.yml/badge.svg`. Para una rama específica: añadir `?branch=main`.
 

@@ -1030,6 +1030,236 @@ jobs:
 
 ---
 
+## Omitir Ejecuciones con Palabras Clave
+
+GitHub permite **omitir la ejecución de un workflow** incluyendo ciertas palabras clave en el mensaje del commit o en el título del PR. Esto evita disparar pipelines para commits que no necesitan CI (documentación, typos, etc.).
+
+### Palabras clave en mensajes de commit
+
+```
+[skip ci]
+[ci skip]
+[no ci]
+[skip actions]
+[actions skip]
+```
+
+Cualquiera de estas palabras, en cualquier parte del mensaje, omite el workflow:
+
+```bash
+git commit -m "docs: fix typo in README [skip ci]"
+git commit -m "[skip actions] Update contributing guide"
+git commit -m "Minor fix
+skip-checks: true"   # ← Trailer alternativo
+```
+
+### Trailer alternativo
+
+```
+skip-checks: true
+```
+
+Añadido como trailer en el mensaje de commit (última línea, con dos puntos y espacio):
+
+```bash
+git commit -m "Update README
+
+skip-checks: true"
+```
+
+### En qué eventos aplica
+
+| Evento | ¿Omite? |
+|--------|---------|
+| `push` | ✅ Sí |
+| `pull_request` | ✅ Sí (si el título del PR contiene la palabra) |
+| `workflow_dispatch` | ❌ No (el usuario decidió ejecutarlo manualmente) |
+| `schedule` | ❌ No |
+| `workflow_call` | ❌ No |
+
+> ⚠️ En `pull_request`, GitHub mira el título del PR, no el mensaje del commit individual.
+
+---
+
+## Triggers Adicionales
+
+### `merge_group`
+
+Se dispara cuando un PR entra en la **merge queue** (cola de merge). Permite ejecutar checks de CI específicos antes de que el merge sea aprobado por la queue.
+
+```yaml
+on:
+  merge_group:
+    types: [checks_requested]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm test
+```
+
+**¿Cuándo usar?** Cuando tienes merge queues activas y quieres validar el estado combinado antes de mergear.
+
+---
+
+### `discussion` y `discussion_comment`
+
+Se disparan en eventos de **GitHub Discussions**.
+
+```yaml
+on:
+  discussion:
+    types:
+      - created
+      - edited
+      - deleted
+      - transferred
+      - pinned
+      - unpinned
+      - labeled
+      - unlabeled
+      - locked
+      - unlocked
+      - category_changed
+      - answered
+      - unanswered
+
+  discussion_comment:
+    types:
+      - created
+      - edited
+      - deleted
+```
+
+**Ejemplo — marcar issue relacionado cuando una discusión se responde:**
+```yaml
+name: Discussion Answered
+
+on:
+  discussion:
+    types: [answered]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notificar respuesta
+        run: |
+          echo "Discusión respondida: ${{ github.event.discussion.title }}"
+          echo "Respondida por: ${{ github.event.discussion.answer.author.login }}"
+```
+
+---
+
+### `check_run` y `check_suite`
+
+Se disparan cuando se crean o actualizan check runs y check suites (resultados de CI externos).
+
+```yaml
+on:
+  check_run:
+    types:
+      - created
+      - rerequested       # Alguien pidió re-ejecutar el check
+      - completed
+      - requested_action  # Acción personalizada en el check
+
+  check_suite:
+    types:
+      - completed
+```
+
+**Caso de uso:** Disparar un workflow cuando todos los checks de otro workflow completan.
+
+---
+
+### `deployment` y `deployment_status`
+
+```yaml
+on:
+  deployment:
+    # Sin tipos — dispara cuando se crea un deployment
+
+  deployment_status:
+    # Sin tipos — dispara cuando un tercero actualiza el estado de un deployment
+```
+
+**Información disponible:**
+```yaml
+github.event.deployment.environment    # staging, production
+github.event.deployment.sha            # SHA del commit desplegado
+github.event.deployment_status.state  # pending, success, failure, error
+```
+
+---
+
+### `branch_protection_rule`
+
+Se dispara cuando cambian las reglas de protección de ramas.
+
+```yaml
+on:
+  branch_protection_rule:
+    types:
+      - created
+      - edited
+      - deleted
+```
+
+---
+
+### `label` y `milestone`
+
+```yaml
+on:
+  label:
+    types: [created, edited, deleted]
+
+  milestone:
+    types: [created, closed, opened, edited, deleted]
+```
+
+---
+
+### Parámetro `timezone` en `schedule`
+
+A partir de 2024, `schedule` soporta el campo `timezone` para especificar la zona horaria en lugar de usar UTC:
+
+```yaml
+on:
+  schedule:
+    - cron: '0 9 * * 1-5'
+      timezone: 'Europe/Madrid'    # ← Ejecuta a las 9:00 hora de Madrid
+
+    - cron: '30 8 * * 1-5'
+      timezone: 'America/New_York' # ← Ejecuta a las 8:30 hora de Nueva York
+```
+
+**Zonas horarias válidas:** Cualquier identificador de la base de datos IANA (ej: `America/Los_Angeles`, `Asia/Tokyo`, `UTC`).
+
+> Sin `timezone`, el cron usa **UTC** por defecto (comportamiento original).
+
+---
+
+**P: ¿Qué palabras clave en un mensaje de commit omiten la ejecución del workflow en un push?**
+→ `[skip ci]`, `[ci skip]`, `[no ci]`, `[skip actions]`, `[actions skip]`. También el trailer `skip-checks: true`.
+
+**P: ¿Funciona `[skip ci]` con `workflow_dispatch` y `schedule`?**
+→ No. Solo aplica a eventos `push` y `pull_request`. Los triggers manuales y programados ignoran estas palabras clave.
+
+**P: ¿Para qué sirve el trigger `merge_group` y qué tipo de actividad soporta?**
+→ Se dispara cuando un PR entra en la merge queue. Solo soporta `types: [checks_requested]`.
+
+**P: ¿Qué zona horaria usa `schedule` por defecto si no se especifica `timezone`?**
+→ UTC.
+
+**P: ¿Qué diferencia hay entre `check_run` y `check_suite`?**
+→ Un `check_suite` agrupa múltiples `check_runs`. `check_suite: completed` se dispara cuando todos los checks del suite terminan. `check_run` se dispara por cada check individual.
+
+---
+
 *Documentación completa de eventos y triggers en GitHub Actions*
 *Última actualización: Enero 2026*
 

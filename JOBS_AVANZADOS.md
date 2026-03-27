@@ -9,7 +9,12 @@
 6. [Conditions (if:) en Todos los Niveles](#6-conditions-if-en-todos-los-niveles)
 7. [Timeout y Continue-on-error](#7-timeout-y-continue-on-error)
 8. [Job Dependencies (needs:)](#8-job-dependencies-needs)
-9. [Preguntas de Examen](#9-preguntas-de-examen)
+9. [run-name: Nombrar Ejecuciones Individuales](#9-run-name-nombrar-ejecuciones-individuales)
+10. [defaults: Configuración por Defecto](#10-defaults-configuración-por-defecto)
+11. [environment.url en Jobs](#11-environmenturl-en-jobs)
+12. [YAML Anchors y Aliases](#12-yaml-anchors-y-aliases)
+13. [Timeouts: Límites Importantes](#13-timeouts-límites-importantes)
+14. [Preguntas de Examen](#14-preguntas-de-examen)
 
 ---
 
@@ -1170,7 +1175,314 @@ jobs:
 
 ---
 
-## 9. Preguntas de Examen
+## 9. run-name: Nombrar Ejecuciones Individuales
+
+El campo `run-name` a nivel de workflow personaliza el nombre que aparece en la pestaña **Actions** de GitHub para cada ejecución individual. Es diferente de `name`, que identifica al workflow en general.
+
+- Se define a nivel de workflow, junto a `name` y `on`
+- Soporta expresiones con contextos como `${{ github.actor }}`, `${{ github.ref_name }}`, etc.
+- Por defecto (sin `run-name`), GitHub muestra el mensaje del commit o el nombre del trigger que disparó el workflow
+
+```yaml
+# Ejemplo 1: Deploy desde una rama, realizado por un usuario
+name: Deploy Workflow
+run-name: Deploy ${{ github.ref_name }} by ${{ github.actor }}
+
+on:
+  push:
+    branches: [main, staging]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "deploying"
+```
+
+```yaml
+# Ejemplo 2: Nombre descriptivo para un PR
+name: PR Checks
+run-name: "PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+
+on:
+  pull_request:
+```
+
+```yaml
+# Ejemplo 3: Con workflow_dispatch, incluyendo el input seleccionado
+name: Release
+run-name: "Release ${{ inputs.version }} to ${{ inputs.environment }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: choice
+        options: [staging, production]
+```
+
+> ⚠️ `run-name` es evaluado como expresión en tiempo de ejecución — puede incluir cualquier contexto disponible al inicio del workflow. Si la expresión falla o produce una cadena vacía, GitHub usa el nombre por defecto.
+
+---
+
+## 10. defaults: Configuración por Defecto
+
+`defaults.run` evita repetir `shell:` y `working-directory:` en cada step. Se puede definir a nivel de workflow (aplica a todos los jobs) o a nivel de job (sobreescribe el del workflow para ese job).
+
+### Shells disponibles
+
+| Shell | Descripción |
+|---|---|
+| `bash` | Bash (predeterminado en Linux/macOS) |
+| `sh` | POSIX sh |
+| `pwsh` | PowerShell Core (multiplataforma) |
+| `python` | Ejecuta el bloque como script Python |
+| `cmd` | Command Prompt de Windows |
+| `powershell` | Windows PowerShell (legacy) |
+
+### Ejemplo a nivel de workflow
+
+```yaml
+name: Python Build
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ./src   # Todos los steps empiezan en ./src
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python --version       # Ejecuta desde ./src con bash
+      - run: pip install -r requirements.txt  # Idem
+```
+
+### Ejemplo a nivel de job (sobreescribe el del workflow)
+
+```yaml
+defaults:
+  run:
+    shell: bash
+    working-directory: ./
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    # Hereda defaults del workflow
+
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh               # Sobreescribe shell para este job
+        working-directory: ./src  # Sobreescribe working-directory
+    steps:
+      - run: Get-Location         # Ejecuta con PowerShell Core desde ./src
+```
+
+> `defaults` no aplica a steps de tipo `uses:` (actions). Solo afecta a steps `run:`.
+
+---
+
+## 11. environment.url en Jobs
+
+El campo `environment` en un job puede tener tanto `name` como `url`. La URL aparece como enlace clickable en la pestaña **Deployments** de GitHub, facilitando el acceso directo al entorno desplegado.
+
+```yaml
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://my-app.com    # ← Aparece como link en la UI de deployments
+    steps:
+      - run: ./deploy.sh
+```
+
+### Con URL dinámica generada en el deploy
+
+```yaml
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    outputs:
+      preview-url: ${{ steps.deploy.outputs.url }}
+    environment:
+      name: preview
+      url: ${{ steps.deploy.outputs.url }}   # ← URL calculada en tiempo real
+    steps:
+      - name: Deploy
+        id: deploy
+        run: |
+          URL=$(./deploy-preview.sh)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+```
+
+### Diferencia entre `name` y `url` en `environment`
+
+| Campo | Efecto |
+|---|---|
+| `environment.name` | Activa las protection rules del entorno (required reviewers, wait timers, etc.) |
+| `environment.url` | Solo visual: aparece como enlace en la UI de deployments, no afecta la ejecución |
+
+---
+
+## 12. YAML Anchors y Aliases
+
+YAML nativo soporta **anchors** (`&nombre`) y **aliases** (`*nombre`) para reutilizar bloques sin repetir código. No son una característica de GitHub Actions sino de YAML en sí, por lo que funcionan en cualquier archivo `.yml`.
+
+### Sintaxis básica
+
+```yaml
+# &nombre define el anchor (bloque reutilizable)
+# *nombre referencia el anchor (alias)
+# <<: fusiona el bloque en el contexto actual (merge key)
+```
+
+### Ejemplo: steps repetidos en múltiples jobs
+
+```yaml
+# Definir el anchor al principio (puede ser en cualquier lugar del YAML)
+x-checkout-steps: &checkout-steps
+  - uses: actions/checkout@v4
+  - name: Setup Node
+    uses: actions/setup-node@v4
+    with:
+      node-version: '20'
+      cache: 'npm'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - *checkout-steps             # ← Alias: inserta los steps aquí
+      - run: npm run build
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - *checkout-steps             # ← Mismo bloque reutilizado
+      - run: npm test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - *checkout-steps             # ← Idem
+      - run: npm run lint
+```
+
+### Merge key (`<<:`) para combinar bloques
+
+```yaml
+x-base-job: &base-job
+  runs-on: ubuntu-latest
+  timeout-minutes: 15
+  env:
+    NODE_ENV: test
+
+jobs:
+  unit-tests:
+    <<: *base-job                   # ← Fusiona el bloque base
+    steps:
+      - run: npm test
+
+  integration-tests:
+    <<: *base-job                   # ← Fusiona el mismo base
+    timeout-minutes: 30             # ← Sobreescribe solo este campo
+    steps:
+      - run: npm run test:integration
+```
+
+### Limitaciones importantes
+
+- Los anchors solo funcionan **dentro del mismo archivo** YAML. No se pueden compartir entre workflows distintos.
+- El valor del anchor se evalúa en tiempo de parseo, no en tiempo de ejecución — no puede contener expresiones `${{ }}` que dependan de contexto de ejecución.
+- Si el bloque referenciado contiene `id:` de steps, habría colisión si se repite en el mismo job.
+
+### Cuándo preferir composite actions sobre anchors
+
+| Usar YAML anchors | Usar composite actions |
+|---|---|
+| Repetición dentro del mismo archivo | Reutilización entre múltiples workflows o repositorios |
+| Equipos pequeños, archivos simples | Necesitas versionar y publicar la lógica |
+| No necesitas lógica condicional compleja | Quieres inputs/outputs parametrizables |
+| Refactor rápido sin crear nuevos archivos | Mantenimiento a largo plazo, mejor legibilidad |
+
+---
+
+## 13. Timeouts: Límites Importantes
+
+### Valores máximos en GitHub-hosted runners
+
+| Ámbito | Timeout máximo |
+|---|---|
+| Por step (`timeout-minutes` en step) | Sin límite impuesto, pero acotado por el del job |
+| Por job (`timeout-minutes` en job) | **360 minutos (6 horas)** |
+| Por workflow completo | **35 días** |
+
+> En self-hosted runners los límites son diferentes: el timeout por defecto del job sube a 6 horas y el máximo del workflow puede ser de 35 días.
+
+### timeout-minutes a nivel de step
+
+```yaml
+steps:
+  - name: Operación lenta con límite
+    timeout-minutes: 10           # ← El step falla si supera 10 minutos
+    run: ./slow-operation.sh
+
+  - name: Este continúa normalmente
+    run: echo "siguiente step"
+```
+
+### timeout-minutes a nivel de job
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30           # ← El job falla si supera 30 minutos
+    steps:
+      - run: npm run build
+```
+
+### Por qué definir timeout siempre
+
+Si no se especifica `timeout-minutes`:
+- En **GitHub-hosted**: el job puede ejecutar hasta 6 horas antes de cancelarse automáticamente
+- El tiempo de runner se sigue consumiendo (y facturando) durante todo ese tiempo
+
+Definir `timeout-minutes` explícitamente protege contra bucles infinitos, procesos colgados y gastos inesperados de minutos de runner.
+
+### Combinación de timeouts step + job
+
+El timeout del step es independiente del del job. Si el step agota su timeout, el step falla, pero el job puede continuar (con `continue-on-error: true` en el step) o fallar (comportamiento por defecto). El timeout del job es un límite superior absoluto que cancela todo lo que quede pendiente.
+
+```yaml
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20           # ← Límite absoluto del job
+    steps:
+      - name: Intento con timeout corto
+        timeout-minutes: 5        # ← Si supera 5 min, falla este step
+        continue-on-error: true   # ← Pero el job continúa
+        run: ./maybe-slow.sh
+
+      - name: Siguiente step ejecuta siempre que el job tenga tiempo
+        run: echo "continuando"
+```
+
+---
+
+## 14. Preguntas de Examen
 
 **P: ¿Cuál es la diferencia entre `$GITHUB_OUTPUT` y `$GITHUB_ENV`?**
 → `GITHUB_OUTPUT` crea outputs accesibles con `steps.id.outputs.key` entre steps. `GITHUB_ENV` crea variables de entorno bash accesibles con `$KEY` en steps siguientes. Solo `GITHUB_OUTPUT` permite compartir datos entre jobs (vía `outputs:` del job).
@@ -1219,4 +1531,22 @@ jobs:
 
 **P: ¿Puede una matrix usar `include` sin definir variables base?**
 → Sí. `include` sin variables base permite definir combinaciones completamente independientes, útil cuando las combinaciones no forman un producto cartesiano.
+
+**P: ¿Qué diferencia hay entre `name` y `run-name` en un workflow?**
+→ `name` es el nombre del workflow (aparece en la lista de workflows de la pestaña Actions). `run-name` es el nombre de cada ejecución individual dentro de ese workflow (aparece en la lista de runs). `run-name` soporta expresiones para mostrar información dinámica como la rama o el actor.
+
+**P: ¿Dónde se puede definir `defaults.run` y qué afecta?**
+→ Se puede definir a nivel de workflow y a nivel de job. Solo afecta a steps `run:`, no a steps `uses:`. El del job sobreescribe al del workflow para ese job concreto. Permite configurar `shell` y `working-directory` una sola vez.
+
+**P: ¿Para qué sirve `environment.url` en un job?**
+→ Para mostrar un enlace clickable en la UI de deployments de GitHub. Es puramente visual y no afecta la ejecución del job. Puede ser una URL estática o dinámica (usando un output de step). `environment.name` es lo que activa las protection rules del entorno.
+
+**P: ¿Qué es un YAML anchor y cuál es su principal limitación frente a las composite actions?**
+→ Un anchor (`&nombre`) define un bloque YAML reutilizable dentro del mismo archivo; un alias (`*nombre`) lo referencia. Su principal limitación es que solo funciona dentro del mismo archivo — no se puede compartir entre workflows distintos ni versionar. Las composite actions son la alternativa para reutilización cross-workflow o cross-repositorio.
+
+**P: ¿Cuál es el timeout máximo por job en GitHub-hosted runners si no se especifica `timeout-minutes`?**
+→ 360 minutos (6 horas). El timeout máximo de un workflow completo es de 35 días. Definir `timeout-minutes` explícitamente es una buena práctica para detectar procesos colgados y evitar consumo innecesario de minutos de runner.
+
+**P: ¿Puede `timeout-minutes` definirse tanto a nivel de step como a nivel de job?**
+→ Sí. El timeout de step es independiente: si el step lo supera, el step falla (el job puede continuar con `continue-on-error: true`). El timeout de job es un límite absoluto que cancela todo el job y sus steps pendientes si se supera.
 

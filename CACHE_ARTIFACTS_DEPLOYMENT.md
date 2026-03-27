@@ -7,7 +7,10 @@
 4. [Deploy a GitHub Pages](#4-deploy-a-github-pages)
 5. [GitHub Packages (GHCR)](#5-github-packages-ghcr)
 6. [Dependabot](#6-dependabot)
-7. [Preguntas de Examen](#7-preguntas-de-examen)
+7. [Límites y Comportamiento Avanzado de Caché](#7-límites-y-comportamiento-avanzado-de-caché)
+8. [Auto-caching en Setup Actions](#8-auto-caching-en-setup-actions)
+9. [Inmutabilidad de Artifacts en v4 y Validación de Integridad](#9-inmutabilidad-de-artifacts-en-v4-y-validación-de-integridad)
+10. [Preguntas de Examen](#10-preguntas-de-examen)
 
 ---
 
@@ -936,7 +939,350 @@ updates:
 
 ---
 
-## 7. Preguntas de Examen
+## 7. Límites y Comportamiento Avanzado de Caché
+
+### Límites de tamaño y expiración
+
+| Límite | Valor |
+|---|---|
+| Tamaño máximo total por repositorio | 10 GB |
+| Expiración sin uso | 7 días |
+| Rate limit de upload | 200 requests/minuto por repo |
+| Rate limit de download | 1500 requests/minuto por repo |
+
+**¿Qué pasa cuando se supera el límite de 10 GB?**
+
+Cuando el repositorio llega al límite de 10 GB de caché, la caché entra en **modo solo lectura**: los jobs pueden restaurar caches existentes, pero no pueden guardar nuevas entradas. GitHub elimina las entradas más antiguas y menos usadas para liberar espacio de forma automática, pero el proceso no es inmediato.
+
+```
+Espacio total: 10 GB
+├── cache A: 3 GB (accedida hace 2 días)
+├── cache B: 4 GB (accedida hace 1 día)
+└── cache C: 3 GB (accedida hace 6 días) ← se elimina primero
+
+Cuando cache C se elimina, el repo vuelve a modo lectura/escritura normal.
+```
+
+Para evitar llegar al límite: usar `restore-keys` ajustados, limpiar caches manualmente con `gh cache delete`, o reducir el tamaño de lo que se cachea.
+
+### Restricciones de acceso entre branches
+
+La caché es **branch-aware**: un job no puede restaurar caché de cualquier branch, solo de los siguientes:
+
+```
+job en feature/x  → puede restaurar: feature/x, main (branch default)
+job en main       → puede restaurar: main
+job en un PR      → puede restaurar: branch del PR, rama base del PR, main
+
+NO se puede acceder a:
+  - Ramas hermanas (feature/y desde feature/x)
+  - Child branches de otras features
+  - Tags diferentes al actual
+```
+
+Ejemplo concreto:
+
+```
+main           → restaura cache de: main
+feature/login  → restaura cache de: feature/login, main
+feature/pay    → restaura cache de: feature/pay, main
+               NO puede: feature/login (rama hermana)
+
+PR de feature/login → main:
+               → restaura cache de: feature/login, main
+```
+
+> Esta restricción es intencional: evita que branches no relacionados compartan estado potencialmente contaminado.
+
+### enableCrossOsArchive
+
+Por defecto, la caché **no se comparte entre sistemas operativos**. Un job de Linux no puede restaurar la caché guardada por un job de Windows, aunque la `key` sea idéntica, porque los binarios son incompatibles.
+
+Para compartir caché entre OS (útil cuando solo se cachean archivos de texto, código fuente, o assets que no son binarios del sistema):
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: .cache/assets
+    key: assets-${{ hashFiles('src/assets/**') }}
+    enableCrossOsArchive: true   # ← Permite que Windows comparta esta cache con Linux/macOS
+```
+
+> ⚠️ `enableCrossOsArchive: true` solo tiene sentido para contenido que sea compatible entre OS (HTML, CSS, imágenes, JSON...). No lo uses para `node_modules`, binarios compilados, o dependencias con extensiones nativas.
+
+---
+
+## 8. Auto-caching en Setup Actions
+
+Muchas actions oficiales de setup tienen caché **integrada**: no requieren añadir `actions/cache` manualmente. Basta con declarar el parámetro de caché en la propia action.
+
+### Tabla de auto-caching por action
+
+| Action | Parámetro | Gestores soportados |
+|---|---|---|
+| `actions/setup-node` | `cache: 'npm'` / `'yarn'` / `'pnpm'` | npm, Yarn, pnpm |
+| `actions/setup-python` | `cache: 'pip'` / `'pipenv'` / `'poetry'` | pip, pipenv, Poetry |
+| `actions/setup-java` | `cache: 'maven'` / `'gradle'` | Maven, Gradle |
+| `actions/setup-ruby` | `bundler-cache: true` | Bundler |
+| `actions/setup-go` | `cache: true` | Go modules |
+| `actions/setup-dotnet` | `cache: true` | NuGet |
+
+### Ejemplos de uso
+
+**Node.js con npm:**
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: '20'
+    cache: 'npm'            # ← Cachea ~/.npm automáticamente
+- run: npm ci
+```
+
+**Node.js con yarn:**
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: '20'
+    cache: 'yarn'           # ← Cachea ~/.yarn/cache automáticamente
+- run: yarn install --frozen-lockfile
+```
+
+**Node.js con pnpm:**
+
+```yaml
+- uses: pnpm/action-setup@v4
+  with:
+    version: 9
+- uses: actions/setup-node@v4
+  with:
+    node-version: '20'
+    cache: 'pnpm'           # ← Cachea el store de pnpm automáticamente
+- run: pnpm install --frozen-lockfile
+```
+
+**Python con pip:**
+
+```yaml
+- uses: actions/setup-python@v5
+  with:
+    python-version: '3.12'
+    cache: 'pip'            # ← Cachea ~/.cache/pip automáticamente
+- run: pip install -r requirements.txt
+```
+
+**Python con Poetry:**
+
+```yaml
+- uses: actions/setup-python@v5
+  with:
+    python-version: '3.12'
+    cache: 'poetry'         # ← Cachea el virtualenv de Poetry automáticamente
+- run: poetry install --no-interaction
+```
+
+**Java con Maven:**
+
+```yaml
+- uses: actions/setup-java@v4
+  with:
+    java-version: '21'
+    distribution: 'temurin'
+    cache: 'maven'          # ← Cachea ~/.m2/repository automáticamente
+- run: mvn -B package
+```
+
+**Java con Gradle:**
+
+```yaml
+- uses: actions/setup-java@v4
+  with:
+    java-version: '21'
+    distribution: 'temurin'
+    cache: 'gradle'         # ← Cachea ~/.gradle/caches y ~/.gradle/wrapper
+- run: ./gradlew build
+```
+
+**Ruby con Bundler:**
+
+```yaml
+- uses: actions/setup-ruby@v1
+  with:
+    ruby-version: '3.3'
+    bundler-cache: true     # ← Instala gems Y cachea automáticamente
+# No necesitas ejecutar `bundle install` — la action lo hace si es cache miss
+```
+
+**Go:**
+
+```yaml
+- uses: actions/setup-go@v5
+  with:
+    go-version: '1.22'
+    cache: true             # ← Cachea ~/go/pkg/mod y ~/.cache/go-build
+- run: go build ./...
+```
+
+**.NET con NuGet:**
+
+```yaml
+- uses: actions/setup-dotnet@v4
+  with:
+    dotnet-version: '8.x'
+    cache: true             # ← Cachea el store de NuGet (~/.nuget/packages)
+- run: dotnet restore
+```
+
+### Ventaja sobre `actions/cache` manual
+
+```yaml
+# Con auto-cache (recomendado para casos estándar):
+- uses: actions/setup-node@v4
+  with:
+    node-version: '20'
+    cache: 'npm'
+- run: npm ci
+
+# Con actions/cache manual (necesario para rutas no estándar o control fino):
+- uses: actions/cache@v4
+  with:
+    path: ~/.npm
+    key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+    restore-keys: ${{ runner.os }}-npm-
+- uses: actions/setup-node@v4
+  with:
+    node-version: '20'
+- run: npm ci
+```
+
+El auto-cache genera la `key` automáticamente basándose en el lock file del proyecto. Para control total de la key o paths no estándar, usar `actions/cache` manual.
+
+---
+
+## 9. Inmutabilidad de Artifacts en v4 y Validación de Integridad
+
+### Inmutabilidad en `actions/upload-artifact@v4`
+
+A partir de la versión v4, los artifacts son **inmutables dentro del mismo run**: no se puede subir un segundo artifact con el mismo nombre en el mismo run — la operación falla con error.
+
+```yaml
+# ❌ FALLA: dos jobs suben el mismo nombre en el mismo run
+jobs:
+  job-a:
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports        # ← Falla si job-b también usa "reports"
+          path: output-a/
+
+  job-b:
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports        # ← Error: artifact "reports" ya existe en este run
+          path: output-b/
+```
+
+```yaml
+# ✅ CORRECTO: nombre único por job
+jobs:
+  job-a:
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports-job-a
+          path: output-a/
+
+  job-b:
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports-job-b
+          path: output-b/
+```
+
+### Jobs en paralelo con artifacts: nombres únicos obligatorios
+
+Para matrices y jobs paralelos que generan artifacts del mismo tipo, el nombre debe incluir un identificador único:
+
+```yaml
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [18, 20, 22]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}-node${{ matrix.node }}  # ← Único por combinación
+          path: test-results.xml
+```
+
+### Validación de integridad: digest SHA-256 automático
+
+`actions/upload-artifact@v4` genera automáticamente un **digest SHA-256** del artifact al subirlo. `actions/download-artifact@v4` verifica ese digest al descargar.
+
+```
+Upload:
+  artifact.zip → SHA-256: abc123...def456
+                 Guardado en metadata del run
+
+Download:
+  Descarga artifact.zip
+  Calcula SHA-256 del archivo descargado
+  Compara con abc123...def456 (metadata)
+  ✅ Coincide → archivo íntegro
+  ❌ No coincide → error, descarga corrupta
+```
+
+Este comportamiento es automático — no requiere configuración adicional. Protege contra corrupción de datos en tránsito o almacenamiento.
+
+### Descarga cross-workflow
+
+Para descargar artifacts generados por un workflow diferente (no el workflow actual), se necesita el `run-id` del workflow que subió el artifact y un `github-token` con permisos de lectura:
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # Descargar artifact de otro workflow del mismo repo
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          run-id: ${{ github.event.workflow_run.id }}  # ← ID del run que generó el artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}    # ← Requerido para runs externos
+
+      # O especificar un run-id fijo (útil en workflow_dispatch con inputs)
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+> Sin `run-id`, `actions/download-artifact@v4` solo puede acceder a artifacts del run actual. El `github-token` es obligatorio cuando se especifica un `run-id` diferente al run en curso.
+
+### Trampa: `overwrite` solo existe en v4
+
+En `actions/upload-artifact@v3` era posible sobrescribir artifacts con el mismo nombre. En v4 esto ya no está permitido por diseño (inmutabilidad). Si necesitas reemplazar un artifact, debes usar un nombre diferente o un nuevo run.
+
+```yaml
+# ✅ v4: usar nombre diferente si el contenido cambia
+- uses: actions/upload-artifact@v4
+  with:
+    name: build-${{ github.sha }}   # ← SHA del commit como parte del nombre
+    path: dist/
+```
+
+---
+
+## 10. Preguntas de Examen
 
 **P: ¿Cuál es la diferencia entre caché y artifacts en GitHub Actions?**
 → La caché persiste entre ejecuciones del workflow (reutilizar dependencias). Los artifacts comparten archivos entre jobs del mismo run (pasar builds, reportes, etc.).
@@ -1003,3 +1349,39 @@ updates:
 
 **P: ¿Cuál es el problema del cache explosion con Docker layers y cómo se evita?**
 → Buildx acumula entradas sin eliminar las antiguas. Se evita con caché rotante o usando `cache-from: type=gha` directamente en `docker/build-push-action`.
+
+**P: ¿Qué ocurre cuando un repositorio supera el límite de 10 GB de caché?**
+→ La caché entra en modo solo lectura: los jobs pueden restaurar caches existentes, pero no pueden guardar nuevas entradas. GitHub elimina las entradas más antiguas y menos usadas para liberar espacio.
+
+**P: ¿Cuánto tiempo tarda en expirar una entrada de caché no usada?**
+→ 7 días. Las entradas no accedidas durante 7 días se eliminan automáticamente.
+
+**P: ¿Puede un job de feature/login restaurar la caché de feature/pay?**
+→ No. Un job solo puede acceder a caches de su propia rama, la rama base del PR y la rama por defecto (main). Las ramas hermanas no son accesibles entre sí.
+
+**P: ¿Para qué sirve `enableCrossOsArchive: true` en `actions/cache`?**
+→ Permite compartir una entrada de caché entre diferentes sistemas operativos (Linux, Windows, macOS). Por defecto, las caches son específicas del OS. Solo es seguro usarlo para contenido independiente del OS (HTML, JSON, imágenes), no para binarios o `node_modules`.
+
+**P: ¿Cuál es el rate limit de upload de caché en GitHub Actions?**
+→ 200 requests de upload por minuto por repositorio. El rate limit de download es 1500 requests por minuto.
+
+**P: ¿Cuál es la ventaja de usar `cache: 'npm'` en `actions/setup-node` frente a `actions/cache` manual?**
+→ El auto-cache es más simple (una sola línea), genera la key automáticamente basándose en el lock file, y gestiona las rutas correctas sin configuración. `actions/cache` manual es necesario para paths no estándar o cuando se necesita control total sobre la key.
+
+**P: ¿Qué parámetro usa `actions/setup-java` para cachear Maven?**
+→ `cache: 'maven'`. Para Gradle: `cache: 'gradle'`.
+
+**P: ¿Qué action de setup usa `bundler-cache: true` en lugar de `cache:`?**
+→ `actions/setup-ruby`. Con `bundler-cache: true`, la action además ejecuta `bundle install` automáticamente si es cache miss.
+
+**P: ¿Qué pasa si dos jobs intentan subir un artifact con el mismo nombre en el mismo run con `actions/upload-artifact@v4`?**
+→ El segundo upload falla con error. Los artifacts en v4 son inmutables: no se puede sobrescribir un artifact con el mismo nombre en el mismo run.
+
+**P: ¿Cómo deben nombrar sus artifacts varios jobs de una matriz que generan el mismo tipo de reporte?**
+→ Incluyendo un identificador único por combinación, por ejemplo: `name: test-results-${{ matrix.os }}-node${{ matrix.node }}`.
+
+**P: ¿`actions/upload-artifact@v4` calcula automáticamente un hash de integridad?**
+→ Sí. Genera un digest SHA-256 al subir el artifact. `actions/download-artifact@v4` lo verifica automáticamente al descargar, detectando cualquier corrupción.
+
+**P: ¿Qué parámetros adicionales requiere `actions/download-artifact@v4` para descargar artifacts de otro workflow?**
+→ `run-id` (ID del run que generó el artifact) y `github-token` (para autenticación en el acceso cross-run). Sin `run-id`, solo se pueden descargar artifacts del run actual.

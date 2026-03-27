@@ -33,9 +33,10 @@ ${{ inputs.param }}         → inputs de workflow_dispatch o workflow_call
 8. [Contexto `strategy` y `matrix`](#contexto-strategy-y-matrix)
 9. [Contexto `needs`](#contexto-needs)
 10. [Contexto `inputs`](#contexto-inputs)
-11. [Arrays en el Contexto: labels, assignees y similares](#arrays-en-el-contexto-labels-assignees-y-similares)
-12. [Funciones de Contexto](#funciones-de-contexto)
-13. [Tabla de Referencia Rápida](#tabla-de-referencia-rápida)
+11. [Contexto `jobs` (solo reusable workflows)](#contexto-jobs-solo-reusable-workflows)
+12. [Arrays en el Contexto: labels, assignees y similares](#arrays-en-el-contexto-labels-assignees-y-similares)
+13. [Funciones de Contexto](#funciones-de-contexto)
+14. [Tabla de Referencia Rápida](#tabla-de-referencia-rápida)
 
 ---
 
@@ -395,7 +396,8 @@ runner.arch                # X86, X64, ARM, ARM64
 runner.temp                # Path al directorio temporal
 runner.tool_cache          # Path a la caché de herramientas
 runner.workspace           # Path al workspace
-runner.debug               # '1' si debug está habilitado
+runner.environment         # 'github-hosted' o 'self-hosted'
+runner.debug               # '1' si debug logging está habilitado (string, no booleano)
 ```
 
 **Ejemplo de uso:**
@@ -407,6 +409,8 @@ runner.debug               # '1' si debug está habilitado
     echo "Arquitectura: ${{ runner.arch }}"
     echo "Temp: ${{ runner.temp }}"
     echo "Workspace: ${{ runner.workspace }}"
+    echo "Entorno: ${{ runner.environment }}"
+    echo "Debug: ${{ runner.debug }}"
 
 - name: Comando específico por OS
   run: |
@@ -415,7 +419,17 @@ runner.debug               # '1' si debug está habilitado
     elif [ "${{ runner.os }}" == "Linux" ]; then
       echo "Ejecutando en Linux"
     fi
+
+- name: Step solo en self-hosted
+  if: runner.environment == 'self-hosted'
+  run: echo "Corriendo en runner propio"
+
+- name: Info de debug
+  if: runner.debug == '1'
+  run: echo "Debug activo — logging detallado habilitado"
 ```
+
+> ⚠️ `runner.debug` es un **string** (`'1'`), no un booleano. Comparar con `== '1'`, no con `== true`. Se activa al habilitar "Enable debug logging" en la UI o seteando el secret `ACTIONS_RUNNER_DEBUG=true`.
 
 ---
 
@@ -670,6 +684,97 @@ jobs:
           echo "Usuario: ${{ inputs.username }}"
           echo "Ambiente: ${{ inputs.environment }}"
 ```
+
+---
+
+## Contexto `jobs` (solo reusable workflows)
+
+El contexto `jobs` es especial: **solo está disponible dentro de un reusable workflow** (un workflow con `on: workflow_call`). No existe en workflows normales.
+
+```yaml
+jobs.<job_id>.result               # success, failure, cancelled, skipped
+jobs.<job_id>.outputs.<output_name> # Output de un job concreto
+```
+
+### Para qué sirve
+
+Permite acceder a outputs y resultados de **todos los jobs del workflow reutilizable**, no solo de los que están en `needs` directo. Esto es especialmente útil en el contexto de `outputs:` del workflow para exponer resultados al caller.
+
+### Diferencia clave entre `jobs` y `needs`
+
+| Contexto | Disponible en | Accede a |
+|---|---|---|
+| `needs` | Cualquier workflow | Solo jobs declarados explícitamente en `needs:` del job actual |
+| `jobs` | Solo reusable workflows (`workflow_call`) | Todos los jobs del workflow, independientemente de dependencias directas |
+
+### Ejemplo: reusable workflow con `jobs` context
+
+```yaml
+# reusable-workflow.yml (on: workflow_call)
+on:
+  workflow_call:
+    outputs:
+      final-result:
+        description: "Resultado consolidado"
+        value: ${{ jobs.final-step.outputs.result }}   # ← usa contexto jobs
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact: ${{ steps.b.outputs.name }}
+    steps:
+      - id: b
+        run: echo "name=app.zip" >> $GITHUB_OUTPUT
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      passed: ${{ steps.t.outputs.passed }}
+    steps:
+      - id: t
+        run: echo "passed=true" >> $GITHUB_OUTPUT
+
+  final-step:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.r.outputs.summary }}
+    steps:
+      - id: r
+        run: |
+          echo "summary=build=${{ needs.build.outputs.artifact }} test=${{ needs.test.outputs.passed }}" >> $GITHUB_OUTPUT
+```
+
+```yaml
+# caller-workflow.yml
+jobs:
+  call-reusable:
+    uses: ./.github/workflows/reusable-workflow.yml
+
+  use-result:
+    needs: call-reusable
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.call-reusable.outputs.final-result }}"
+```
+
+### Acceso a `jobs` dentro del reusable workflow para definir outputs
+
+En la sección `outputs:` del workflow reutilizable, se usa `jobs.<id>.outputs.<key>` para referenciar outputs de cualquier job del workflow, incluso si no hay una relación directa de `needs` en ese nivel:
+
+```yaml
+on:
+  workflow_call:
+    outputs:
+      deploy-url:
+        value: ${{ jobs.deploy.outputs.url }}   # ← jobs context, no needs
+      test-status:
+        value: ${{ jobs.test.outputs.status }}  # ← jobs context, no needs
+```
+
+> Si intentas usar `needs.deploy.outputs.url` en la sección `outputs:` del workflow (fuera de un job), obtendrás un error — en ese nivel no existe el contexto `needs`. Solo `jobs` funciona ahí.
 
 ---
 
@@ -943,11 +1048,31 @@ Estados de ejecución.
 | `vars` | Configuración | `${{ vars.ENVIRONMENT }}` |
 | `strategy` | Info de matriz | `${{ strategy.job-index }}` |
 | `matrix` | Valor de matriz | `${{ matrix.node-version }}` |
-| `needs` | Outputs de jobs | `${{ needs.build.outputs.tag }}` |
+| `needs` | Outputs de jobs dependientes | `${{ needs.build.outputs.tag }}` |
 | `inputs` | Inputs del workflow | `${{ inputs.environment }}` |
+| `jobs` | Outputs de todos los jobs (solo reusable) | `${{ jobs.deploy.outputs.url }}` |
+
+---
+
+## Preguntas de Examen
+
+**P: ¿Qué devuelve `runner.environment` y para qué sirve?**
+→ Devuelve `'github-hosted'` si el runner es de GitHub o `'self-hosted'` si es propio. Permite escribir steps condicionales que solo se ejecutan en un tipo de runner concreto con `if: runner.environment == 'self-hosted'`.
+
+**P: ¿`runner.debug` es un booleano o un string? ¿Cómo se compara correctamente?**
+→ Es un string. Cuando el debug logging está activo vale `'1'`; si no está activo, la propiedad no existe (está vacía). Comparar siempre con `== '1'`, no con `== true`. Se activa con el secret `ACTIONS_RUNNER_DEBUG=true` o desde la UI al re-ejecutar un workflow.
+
+**P: ¿En qué contextos está disponible el contexto `jobs`?**
+→ Solo en reusable workflows (workflows con `on: workflow_call`). No existe en workflows normales ni en jobs dentro de un workflow caller.
+
+**P: ¿Cuál es la diferencia entre `jobs` y `needs` para acceder a outputs?**
+→ `needs` solo accede a outputs de los jobs declarados explícitamente en `needs:` del job actual. `jobs` accede a outputs y resultados de todos los jobs del workflow reutilizable sin necesidad de declararlos como dependencia. `jobs` también es el único contexto válido en la sección `outputs:` de nivel de workflow (donde `needs` no existe).
+
+**P: Si quieres exponer el output de un job en la sección `outputs:` del workflow reutilizable, ¿qué contexto debes usar?**
+→ El contexto `jobs`. Por ejemplo: `value: ${{ jobs.deploy.outputs.url }}`. No se puede usar `needs` en ese nivel porque está fuera de cualquier job.
 
 ---
 
 *Documentación completa de contextos y variables en GitHub Actions*
-*Última actualización: Enero 2026*
+*Última actualización: Marzo 2026*
 

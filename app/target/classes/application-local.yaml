@@ -1,0 +1,20 @@
+
+application:
+  ia:
+    providers:
+      - name: qwen2.5-coder
+        as-default: true
+        type: ollama
+        base-url: http://localhost:11432
+        model: qwen2.5-coder:7b
+        temperature: 0.2
+      - name: qwen3.5
+        type: ollama
+        base-url: http://localhost:11433
+        model: qwen3.5:9b
+        temperature: 0.2
+spring:
+  docker:
+    compose:
+      enabled: true
+      lifecycle-management: start_only

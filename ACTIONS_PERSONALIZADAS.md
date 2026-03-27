@@ -7,7 +7,9 @@
 4. [Docker Actions](#4-docker-actions)
 5. [Cuándo Usar Cada Tipo](#5-cuándo-usar-cada-tipo)
 6. [Publicar en el Marketplace](#6-publicar-en-el-marketplace)
-7. [Preguntas de Examen](#7-preguntas-de-examen)
+7. [Versionado Semántico de Actions](#7-versionado-semántico-de-actions)
+8. [Testing de JavaScript Actions](#8-testing-de-javascript-actions)
+9. [Preguntas de Examen](#9-preguntas-de-examen)
 
 ---
 
@@ -522,7 +524,212 @@ inputs:
 
 ---
 
-## 7. Preguntas de Examen
+## 7. Versionado Semántico de Actions
+
+Cuando publicas una action (o la usas internamente), el **versionado** controla qué código ejecutará el workflow al referenciarla con `uses:`.
+
+### Formas de referenciar una action
+
+```yaml
+# 1. Tag semántico mayor (recomendado para usuarios)
+- uses: actions/checkout@v4          # → apunta al tag más reciente v4.x.x
+
+# 2. Tag semántico específico (más reproducible)
+- uses: actions/checkout@v4.1.1      # → versión exacta
+
+# 3. SHA completo del commit (máxima seguridad)
+- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+# 4. Rama (no recomendado en producción — mutable)
+- uses: actions/checkout@main
+
+# 5. Action local (en el mismo repositorio)
+- uses: ./.github/actions/mi-action
+```
+
+### Estrategia de versionado para publicadores
+
+La convención estándar del ecosistema GitHub Actions usa **tags móviles** para el major:
+
+```
+v1.0.0  ← tag inmutable (SHA concreto)
+v1.0.1  ← tag inmutable
+v1.1.0  ← tag inmutable
+v1      ← tag MÓVIL que siempre apunta al último v1.x.x
+```
+
+```bash
+# Al publicar v1.2.3, actualizar el tag móvil v1:
+git tag -fa v1 -m "Update v1 tag"
+git push origin v1 --force
+```
+
+**¿Por qué `@v4` y no `@v4.2.1`?**
+
+| Referencia | Ventaja | Desventaja |
+|---|---|---|
+| `@v4` | Recibe bugfixes automáticamente | Puede romper si hay breaking change |
+| `@v4.1.0` | Reproducible, no cambia | No recibe patches de seguridad |
+| `@SHA` | Máxima seguridad, inmutable | Difícil de leer, hay que actualizar manualmente |
+
+**Recomendación oficial de GitHub Security:**
+> Usar SHA completo para actions de terceros en workflows de producción. Los tags pueden moverse (force push).
+
+### Semver en action.yml
+
+El archivo `action.yml` **no** tiene un campo de versión — la versión la gestionan los tags de git del repositorio de la action.
+
+### Cómo actualizar una action en workflows
+
+```bash
+# Usando Dependabot (recomendado para mantener actions actualizadas)
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+```
+
+---
+
+## 8. Testing de JavaScript Actions
+
+Las JavaScript actions se pueden testear localmente antes de publicarlas usando **Jest** y mocks de `@actions/core`.
+
+### Setup del proyecto
+
+```bash
+npm install --save-dev jest @jest/globals
+npm install @actions/core @actions/github
+```
+
+```json
+// package.json
+{
+  "scripts": {
+    "test": "jest",
+    "build": "npx ncc build src/index.js -o dist"
+  },
+  "jest": {
+    "testEnvironment": "node"
+  }
+}
+```
+
+### Estructura de archivos
+
+```
+mi-action/
+├── src/
+│   └── index.js        ← lógica de la action
+├── __tests__/
+│   └── index.test.js   ← tests
+├── dist/
+│   └── index.js        ← compilado (git tracked)
+├── action.yml
+└── package.json
+```
+
+### La action (src/index.js)
+
+```javascript
+const core = require('@actions/core');
+
+async function run() {
+  try {
+    const name = core.getInput('name', { required: true });
+    const greeting = `Hello, ${name}!`;
+    core.setOutput('greeting', greeting);
+    core.info(greeting);
+  } catch (error) {
+    core.setFailed(error.message);
+  }
+}
+
+run();
+```
+
+### El test (__tests__/index.test.js)
+
+```javascript
+const core = require('@actions/core');
+
+// Mock de @actions/core ANTES de importar la action
+jest.mock('@actions/core');
+
+describe('greeting action', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('genera saludo correcto', async () => {
+    // Arrange: simular input
+    core.getInput.mockReturnValue('GitHub');
+
+    // Act: ejecutar la action
+    await require('../src/index');
+
+    // Assert: verificar outputs y logs
+    expect(core.setOutput).toHaveBeenCalledWith('greeting', 'Hello, GitHub!');
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  test('falla si name está vacío', async () => {
+    core.getInput.mockImplementation(() => {
+      throw new Error('Input required: name');
+    });
+
+    await require('../src/index');
+
+    expect(core.setFailed).toHaveBeenCalledWith('Input required: name');
+  });
+});
+```
+
+### Variables de entorno para tests
+
+`@actions/core` lee los inputs de variables de entorno con el formato `INPUT_<NOMBRE_EN_MAYÚSCULAS>`:
+
+```javascript
+// Alternativa sin mock: usar variables de entorno
+process.env['INPUT_NAME'] = 'GitHub';
+```
+
+### Workflow de CI para la propia action
+
+```yaml
+# .github/workflows/ci.yml en el repo de la action
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm test
+      - run: npm run build   # verificar que dist/ se compila correctamente
+
+  # Probar la action contra sí misma
+  self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./               # ← usar la action del propio repo
+        with:
+          name: 'World'
+```
+
+---
+
+## 9. Preguntas de Examen
 
 **P: ¿Cuáles son los tres tipos de actions personalizadas?**
 → Composite (pasos YAML/shell), JavaScript (Node.js), Docker (cualquier lenguaje en container).
@@ -550,4 +757,19 @@ inputs:
 ```bash
 echo "nombre-output=valor" >> $GITHUB_OUTPUT
 ```
+
+**P: ¿Qué diferencia hay entre referenciar una action con `@v4` vs `@v4.1.0` vs `@SHA`?**
+→ `@v4` es un tag móvil que el autor puede actualizar para apuntar al último 4.x.x (recibe patches automáticamente pero puede cambiar). `@v4.1.0` es un tag inmutable. `@SHA` es el commit exacto — inmutable y la referencia más segura para producción.
+
+**P: ¿Por qué GitHub recomienda usar SHA completo en lugar de tags para actions de terceros?**
+→ Los tags pueden moverse con `git push --force`. Un atacante que comprometa el repositorio de la action podría cambiar el tag para que apunte a código malicioso. El SHA es inmutable.
+
+**P: ¿Cómo se convierte en fixture el input de una JavaScript action en un test con Jest?**
+→ Mockeando `@actions/core` con `jest.mock('@actions/core')` y usando `core.getInput.mockReturnValue('valor')`. Alternativamente, seteando la variable de entorno `INPUT_<NOMBRE>`.
+
+**P: ¿Por qué hay que hacer commit del directorio `dist/` en una JavaScript action?**
+→ Porque GitHub ejecuta directamente el archivo compilado indicado en `action.yml` (`main: dist/index.js`). No ejecuta `npm install` ni compila en tiempo de ejecución. Si `dist/` no está en el repo, la action falla.
+
+**P: ¿Cómo se puede usar Dependabot para mantener actualizadas las actions de un repo?**
+→ Añadiendo en `.github/dependabot.yml` un entry con `package-ecosystem: github-actions`. Dependabot creará PRs automáticos cuando haya nuevas versiones de las actions usadas en los workflows.
 

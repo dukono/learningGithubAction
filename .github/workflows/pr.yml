@@ -2,7 +2,12 @@ name: Read branch info
 on: 
   pull_request: 
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
-    
+
+# Un grupo por PR → cancelar CI anterior del mismo PR
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+  
 jobs:
   show-branch-info:
     runs-on: ubuntu-latest

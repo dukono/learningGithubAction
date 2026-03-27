@@ -8,7 +8,13 @@
 5. [Versionado Semántico Automático](#5-versionado-semántico-automático)
 6. [Notificaciones Externas (Slack, Teams)](#6-notificaciones-externas)
 7. [Docker Avanzado: Multi-stage y Layer Cache](#7-docker-avanzado)
-8. [Preguntas de Examen](#8-preguntas-de-examen)
+8. [Required Workflows](#8-required-workflows)
+9. [Audit Logs de GitHub Actions](#9-audit-logs-de-github-actions)
+10. [Variables de Organización y Repositorio](#10-variables-de-organización-y-repositorio)
+11. [Workflow Templates (Starter Workflows)](#11-workflow-templates-starter-workflows)
+12. [Custom Deployment Protection Rules](#12-custom-deployment-protection-rules)
+13. [Opciones Adicionales de Environments](#13-opciones-adicionales-de-environments)
+14. [Preguntas de Examen](#14-preguntas-de-examen)
 
 ---
 
@@ -1148,7 +1154,469 @@ En PRs puede interesar verificar que el Dockerfile compila sin subir la imagen:
 
 ---
 
-## 8. Preguntas de Examen
+## 8. Required Workflows
+
+Los **required workflows** son workflows configurados a nivel de organización que se añaden automáticamente como checks obligatorios en todos los repositorios (o en un subconjunto seleccionado). No es necesario modificar cada repositorio: el check aparece automáticamente en los pull requests.
+
+### ¿Para qué sirven?
+
+```
+SIN required workflows:
+  repo-a/.github/workflows/ci.yml    ← cada equipo define sus propios checks
+  repo-b/.github/workflows/ci.yml    ← puede faltar seguridad, lint, etc.
+  repo-c/                             ← sin workflows
+
+CON required workflows:
+  org/.github/workflows/security-scan.yml  ← se ejecuta en TODOS los repos
+  org/.github/workflows/compliance.yml     ← obligatorio en todos los PRs
+```
+
+**Casos de uso habituales:**
+- Escaneo de seguridad / SAST obligatorio en todos los repos
+- Comprobaciones de licencias o compliance
+- Validación de estructura de commits (Conventional Commits)
+- Verificación de cobertura mínima de tests
+
+### Configuración
+
+```
+Organization Settings → Actions → General → Required workflows
+→ Add workflow
+  - Repository: el repo de la org donde está el workflow (ej: .github)
+  - Workflow: ruta al archivo (ej: .github/workflows/security-scan.yml)
+  - Applies to: All repositories / Selected repositories
+```
+
+**Requisitos:**
+- El workflow fuente debe estar en un repositorio de la organización
+- Debe usar el trigger `pull_request` (es el más común) o `push`
+- El repositorio fuente debe ser accesible para todos los repos destino
+
+### Comportamiento
+
+```yaml
+# Workflow en org/.github/workflows/security-scan.yml
+name: Security Scan
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run security scan
+        run: echo "Scanning..."
+```
+
+- Se ejecuta en cada PR hacia `main` en **todos los repos de la org** automáticamente
+- Aparece como check requerido aunque el repo no lo defina en su propio `.github/workflows/`
+- Si el workflow falla, el PR no puede mergearse (si está configurado como required check en branch protection)
+- El workflow se ejecuta con el código del **repositorio destino**, no del repositorio fuente
+
+### Diferencia con branch protection rules
+
+| | Required Workflow | Branch Protection (required checks) |
+|---|---|---|
+| Configuración | A nivel de org | A nivel de repo/rama |
+| Propagación | Automática a todos los repos | Manual en cada repo |
+| Workflow | Definido en repo centralizado | Definido en el mismo repo |
+| Caso de uso | Políticas corporativas | Checks de proyecto específico |
+
+---
+
+## 9. Audit Logs de GitHub Actions
+
+Los **audit logs** registran todas las acciones administrativas relacionadas con GitHub Actions en una organización o empresa. Son esenciales para auditorías de seguridad y cumplimiento.
+
+### Dónde encontrarlos
+
+```
+Organization → Settings → Audit log
+Enterprise → Settings → Audit log
+
+Filtros útiles:
+  action:workflows.*          → eventos de workflows
+  action:org.update_actions_* → cambios en políticas de Actions
+  action:runner.*             → registro/eliminación de runners
+  action:secret.*             → acceso/modificación de secrets
+```
+
+### Eventos registrados relevantes a Actions
+
+| Categoría | Eventos |
+|---|---|
+| **Workflows** | Creación, ejecución, cancelación, borrado de workflows |
+| **Runners** | Registro y eliminación de self-hosted runners, cambios en runner groups |
+| **Secrets** | Creación, actualización y eliminación de secrets (no el valor, solo el nombre) |
+| **Políticas** | Cambios en `allowed actions`, `fork workflow policies`, `required workflows` |
+| **Artifacts** | Descarga de artifacts |
+| **Environments** | Creación/modificación de environments y protection rules |
+
+### Exportar audit logs
+
+```bash
+# Via API REST (requiere token con permiso audit_log:read)
+curl -H "Authorization: Bearer TOKEN" \
+  "https://api.github.com/orgs/ORG/audit-log?phrase=action:workflows&per_page=100"
+
+# Via GitHub CLI
+gh api /orgs/ORG/audit-log --paginate \
+  -f phrase="action:workflows.completed_workflow_run"
+```
+
+### Retención
+
+| Plan | Retención |
+|---|---|
+| Free / Pro / Team | 90 días |
+| GitHub Enterprise Cloud | 180 días |
+| GitHub Enterprise Cloud + audit log streaming | Indefinida (streaming a SIEM externo) |
+
+### Audit log streaming (Enterprise)
+
+Permite enviar eventos en tiempo real a sistemas externos (AWS S3, Azure Blob, Splunk, Datadog):
+
+```
+Enterprise Settings → Audit log → Log streaming
+→ Configurar destino (S3, Azure Blob Storage, Google Cloud Storage, Splunk, Datadog)
+```
+
+---
+
+## 10. Variables de Organización y Repositorio
+
+Las **variables** (`vars.*`) son valores de configuración no sensibles que pueden definirse a tres niveles y heredarse hacia abajo.
+
+### Niveles de variables
+
+```
+Enterprise (vars.*)
+    └── Organization (vars.*)
+            └── Repository (vars.*)
+                    └── Environment (vars.*)
+```
+
+**Regla de precedencia:** el nivel más específico sobreescribe al más general.
+
+```yaml
+# Si existe vars.DEPLOY_URL a nivel de org y también a nivel de repo,
+# el workflow usará el valor del repo (más específico).
+```
+
+### Configuración
+
+```
+# Variables de repositorio
+Repo → Settings → Secrets and variables → Actions → Variables → New repository variable
+
+# Variables de organización
+Org → Settings → Secrets and variables → Actions → Variables → New organization variable
+  → Visibility: All repositories / Private repositories / Selected repositories
+```
+
+### Diferencia entre secrets y variables
+
+| | `secrets.*` | `vars.*` |
+|---|---|---|
+| Encriptación | ✅ Sí | ❌ No |
+| Visible en logs | ❌ Nunca (maskeado) | ✅ Sí (valor visible) |
+| Uso | Tokens, contraseñas, claves | URLs, nombres de entorno, flags |
+| Disponible en | `secrets.NOMBRE` | `vars.NOMBRE` |
+
+### Ejemplo práctico
+
+```yaml
+# Variables definidas:
+# Org level:   vars.REGISTRY_URL = "ghcr.io/mi-org"
+# Repo level:  vars.APP_NAME = "my-service"
+# Env level:   vars.DEPLOY_TARGET = "k8s-prod"
+
+jobs:
+  deploy:
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        run: |
+          echo "Registry: ${{ vars.REGISTRY_URL }}"    # de la org
+          echo "App: ${{ vars.APP_NAME }}"              # del repo
+          echo "Target: ${{ vars.DEPLOY_TARGET }}"      # del environment
+          docker pull ${{ vars.REGISTRY_URL }}/${{ vars.APP_NAME }}:latest
+```
+
+### Variables predefinidas vs variables de usuario
+
+No confundir `vars.*` con las **variables de entorno automáticas** (`$GITHUB_SHA`, `$GITHUB_REF`…):
+
+| Origen | Cómo acceder | Quién las define |
+|---|---|---|
+| Variables de usuario | `${{ vars.MI_VAR }}` | Admin (Settings) |
+| Env vars automáticas | `$GITHUB_SHA`, `$RUNNER_OS`… | GitHub automáticamente |
+| Env vars del workflow | `${{ env.MI_VAR }}` | El propio workflow YAML |
+
+---
+
+## 11. Workflow Templates (Starter Workflows)
+
+Los **Workflow Templates** (también llamados Starter Workflows) son plantillas de workflows que una organización puede publicar para que aparezcan como sugerencias cuando alguien crea un nuevo workflow en cualquier repositorio de esa organización. Permiten estandarizar la forma en que los equipos comienzan a usar GitHub Actions.
+
+### Repositorio `.github` de la organización
+
+Las plantillas se almacenan en un repositorio especial llamado `.github` dentro de la organización:
+
+```
+github.com/mi-org/.github/
+└── workflow-templates/
+    ├── ci-nodejs.yml                  # El workflow plantilla
+    ├── ci-nodejs.properties.json      # Metadatos de la plantilla
+    ├── security-scan.yml
+    └── security-scan.properties.json
+```
+
+El repositorio `.github` de la organización es distinto del directorio `.github/` de cada repositorio. Es un repositorio dedicado a configuraciones compartidas de la organización.
+
+### Estructura: el archivo `.yml`
+
+El archivo de workflow es un workflow YAML normal, con un placeholder especial:
+
+```yaml
+# workflow-templates/ci-nodejs.yml
+name: Node.js CI
+
+on:
+  push:
+    branches: [$default-branch]    # ← Placeholder: se reemplaza por la rama por defecto del repo
+  pull_request:
+    branches: [$default-branch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Usar Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build --if-present
+      - run: npm test
+```
+
+**Placeholder `$default-branch`:** GitHub lo reemplaza automáticamente por el nombre de la rama por defecto del repositorio destino (`main`, `master`, etc.) cuando el usuario aplica la plantilla.
+
+### Estructura: el archivo `.properties.json`
+
+Cada plantilla necesita un archivo de metadatos con el mismo nombre base:
+
+```json
+// workflow-templates/ci-nodejs.properties.json
+{
+  "name": "Node.js CI",
+  "description": "Build and test a Node.js project with npm.",
+  "iconName": "nodejs",
+  "categories": [
+    "JavaScript",
+    "Node"
+  ],
+  "filePatterns": [
+    "package.json$",
+    "^package.json$"
+  ]
+}
+```
+
+| Campo | Descripción |
+|---|---|
+| `name` | Nombre visible de la plantilla en la UI |
+| `description` | Descripción corta que aparece bajo el nombre |
+| `iconName` | Nombre del icono (de la lista de iconos de GitHub) |
+| `categories` | Categorías para filtrar plantillas (lenguajes, herramientas) |
+| `filePatterns` | Regex de archivos en la raíz del repo que activan la sugerencia |
+
+### Cómo aparece al usuario
+
+Cuando un desarrollador va a `Repo → Actions → New workflow`, GitHub muestra las plantillas de la organización junto a las plantillas públicas de GitHub:
+
+```
+Suggested for this repository
+  ┌─────────────────────────────┐
+  │ [nodejs icon] Node.js CI    │
+  │ Build and test a Node.js    │
+  │ project with npm.           │
+  │                  [Configure]│
+  └─────────────────────────────┘
+```
+
+Las sugerencias basadas en `filePatterns` aparecen destacadas: si el repositorio contiene `package.json` en la raíz, la plantilla de Node.js se sugiere automáticamente al inicio de la lista.
+
+### Sugerencias inteligentes con `filePatterns`
+
+```json
+// Plantilla de Python: sugiere si hay requirements.txt o setup.py
+"filePatterns": [
+  "requirements.txt$",
+  "setup.py$",
+  "pyproject.toml$"
+]
+
+// Plantilla de Java: sugiere si hay pom.xml o build.gradle
+"filePatterns": [
+  "^pom.xml$",
+  "^build.gradle$",
+  "^build.gradle.kts$"
+]
+
+// Plantilla genérica: aparece siempre (sin restricción)
+"filePatterns": []
+```
+
+---
+
+## 12. Custom Deployment Protection Rules
+
+Las **Custom Deployment Protection Rules** permiten integrar sistemas externos en el proceso de aprobación de deployments a un environment. En lugar de (o además de) los revisores manuales de GitHub, una GitHub App puede aprobar o rechazar automáticamente un deployment basándose en lógica externa.
+
+### ¿Qué son?
+
+Son reglas de protección de environment implementadas a través de **GitHub Apps** (integraciones externas). Cuando un job intenta hacer deploy a un environment protegido, GitHub llama a la GitHub App para que evalúe si el deployment puede proceder.
+
+```
+Job intenta deploy a environment "production"
+    │
+    ▼
+GitHub envía evento deployment_protection_rule a la GitHub App
+    │
+    ▼
+GitHub App evalúa condiciones externas:
+  - ¿Existe ticket de Jira aprobado?
+  - ¿Pasó el compliance check?
+  - ¿ServiceNow tiene aprobación?
+  - ¿No hay incidente activo en PagerDuty?
+    │
+    ├── ✅ Aprueba → deployment continúa
+    └── ❌ Rechaza → job falla, deployment bloqueado
+```
+
+### Diferencia con las built-in protection rules
+
+| | Built-in Rules | Custom Rules (GitHub Apps) |
+|---|---|---|
+| **Required Reviewers** | Personas o equipos de GitHub | Sistema externo (Jira, ServiceNow...) |
+| **Wait Timer** | Tiempo fijo de espera | Lógica arbitraria |
+| **Configuración** | En Settings del environment | GitHub App instalada + configurada |
+| **Casos de uso** | Aprobación manual del equipo | Compliance automático, ticketing |
+
+### Casos de uso habituales
+
+- **Jira integration:** El deployment solo puede proceder si existe un ticket de Change Request aprobado en Jira.
+- **ServiceNow:** Validación de change management window y aprobación de CAB (Change Advisory Board).
+- **PagerDuty:** Bloquear deployments si hay un incidente activo de P1/P2 en el servicio.
+- **Compliance check externo:** Verificar que el artefacto pasó un scan de seguridad en una herramienta externa antes de desplegarlo.
+
+### Cómo funciona
+
+La GitHub App debe estar instalada en la organización o repositorio y configurada con el permiso `deployments`. Cuando GitHub envía el evento, la App tiene un tiempo límite para responder via API:
+
+```
+# La GitHub App aprueba el deployment via API
+POST /repos/{owner}/{repo}/actions/runs/{run_id}/deployment_protection_rule
+{
+  "environment_name": "production",
+  "state": "approved",           // o "rejected"
+  "comment": "Change ticket JIRA-1234 aprobado"
+}
+```
+
+### Configuración
+
+```
+Repo Settings → Environments → [nombre del environment] → Deployment protection rules
+  → Add rule
+    ○ Required reviewers    (built-in: personas de GitHub)
+    ○ Wait timer            (built-in: tiempo de espera)
+    ● [Mi GitHub App]       (custom: integración externa)
+```
+
+Las custom rules aparecen en la lista solo si la GitHub App está instalada y configurada para ese repositorio u organización.
+
+---
+
+## 13. Opciones Adicionales de Environments
+
+Además de las protection rules básicas (Required Reviewers, Wait Timer), los environments de GitHub tienen opciones adicionales relevantes para entornos empresariales.
+
+### Prevent Self-Review
+
+Cuando `Prevent self-review` está activado, **el usuario que disparó el workflow no puede aprobar su propio deployment**.
+
+```
+Escenario sin Prevent Self-Review:
+  Alice hace push a main → workflow pide aprobación
+  Alice aprueba su propio deployment → deploya sin supervisión real
+
+Escenario con Prevent Self-Review activado:
+  Alice hace push a main → workflow pide aprobación
+  Alice NO puede aprobar → debe esperar a Bob o Carol
+```
+
+**Configuración:**
+```
+Repo Settings → Environments → [env name] → Deployment protection rules
+  ☑ Prevent self-review
+```
+
+Casos de uso: equipos pequeños donde el mismo desarrollador podría ser el único revisor disponible, entornos de producción que requieren four-eyes principle (dos personas distintas).
+
+### Allow Administrators to Bypass
+
+Por defecto, los administradores del repositorio pueden **saltarse** las protection rules de un environment y forzar un deployment sin aprobación. Esta opción puede deshabilitarse:
+
+```
+Repo Settings → Environments → [env name] → Deployment protection rules
+  ☑ Allow administrators to bypass configured protection rules   (activado por defecto)
+  ☐ [desactivar]  →  incluso los admins deben pasar por el proceso de aprobación
+```
+
+**Casos de uso para deshabilitar:**
+- Entornos regulados (finanzas, sanidad) donde ningún individuo puede saltarse controles
+- Compliance que requiere que todos los deployments, sin excepción, tengan aprobación documentada
+- Separación de duties: quien tiene acceso de admin al repo no debe poder hacer bypass en producción
+
+### Eliminación de un Environment
+
+Cuando se elimina un environment desde Settings, ocurre lo siguiente automáticamente:
+
+```
+Al eliminar environment "production":
+
+1. Se eliminan TODOS los secrets del environment
+   → secrets.PROD_DB_PASSWORD, secrets.PROD_API_KEY, etc. desaparecen
+
+2. Se eliminan TODAS las variables del environment
+   → vars.DEPLOY_TARGET, vars.APP_URL, etc. desaparecen
+
+3. Se eliminan TODAS las protection rules del environment
+   → Required reviewers, wait timers, custom rules
+
+4. Jobs en espera de aprobación de ese environment FALLAN automáticamente
+   → Si hay un deployment esperando aprobación en "production"
+      y se borra el environment, el job falla inmediatamente
+```
+
+**Consecuencia práctica:** Si se necesita recrear un environment eliminado accidentalmente, todos los secrets y variables deben reconfigurarse manualmente. No hay forma de recuperarlos una vez eliminados.
+
+---
+
+## 14. Preguntas de Examen
 
 **P: ¿Cómo restringe un admin de organización qué actions pueden usar los repos?**
 → En `Organization Settings → Actions → General → Actions permissions`. Puede permitir todas, solo las de GitHub, o una lista explícita de patrones (`actions/checkout@*, mi-org/*`).
@@ -1213,3 +1681,51 @@ En PRs puede interesar verificar que el Dockerfile compila sin subir la imagen:
 **P: ¿Cómo notificar qué job específico falló en lugar del resultado global del workflow?**
 → En el job de notificación, comprobar `needs.*.result` individualmente para cada job y construir el mensaje con los nombres de los jobs fallidos.
 
+**P: ¿Qué son los Required Workflows y en qué se diferencian de los required checks?**
+→ Los required workflows son workflows definidos a nivel de organización que se ejecutan automáticamente como checks en todos los repos (sin que cada repo los defina). Los required checks son checks que el admin configura en branch protection de un repo concreto.
+
+**P: ¿Dónde se define un required workflow y con qué código se ejecuta?**
+→ En un repositorio de la organización (típicamente `.github`). Se ejecuta con el código del **repositorio destino** (el repo del PR), no del repositorio donde está definido el workflow.
+
+**P: ¿Cuánto tiempo se retienen los audit logs en GitHub Free/Team vs Enterprise Cloud?**
+→ Free/Team: 90 días. Enterprise Cloud: 180 días. Con audit log streaming activo: indefinido (se envían a un SIEM externo en tiempo real).
+
+**P: ¿Los audit logs registran el valor de un secret cuando se modifica?**
+→ No. Solo registran el evento (creación, actualización, eliminación) y el nombre del secret. El valor nunca queda registrado.
+
+**P: ¿Cuál es la diferencia entre `vars.*` y `secrets.*`?**
+→ `vars.*` son variables no encriptadas, visibles en logs, para configuración no sensible (URLs, nombres). `secrets.*` son encriptadas, nunca aparecen en logs, para datos sensibles (tokens, contraseñas).
+
+**P: Si una variable `vars.URL` está definida a nivel de org y también a nivel de repo, ¿cuál usa el workflow?**
+→ La del repositorio — el nivel más específico sobreescribe al más general.
+
+**P: ¿Pueden los required workflows acceder a los secrets del repo destino?**
+→ Sí, si el required workflow usa `secrets: inherit` o referencia secretos explícitamente. El workflow tiene acceso al contexto del repositorio destino donde se ejecuta el PR.
+
+
+**P: ¿En qué repositorio se almacenan los Workflow Templates de una organización?**
+→ En el repositorio especial `.github` de la organización (`github.com/mi-org/.github`), dentro del directorio `workflow-templates/`.
+
+**P: ¿Qué dos archivos son necesarios por cada Workflow Template?**
+→ Un archivo `.yml` con el workflow y un archivo `.properties.json` con los metadatos (nombre, descripción, icono, categorías y filePatterns).
+
+**P: ¿Qué hace el placeholder `$default-branch` en un Workflow Template?**
+→ Se reemplaza automáticamente por el nombre de la rama por defecto del repositorio destino cuando el usuario aplica la plantilla. Evita hardcodear `main` o `master`.
+
+**P: ¿Para qué sirve el campo `filePatterns` en el `.properties.json` de una plantilla?**
+→ Define patrones regex de archivos en la raíz del repositorio que activan la sugerencia de la plantilla. Si el repo contiene un archivo que coincide con algún patrón, la plantilla aparece destacada como sugerencia.
+
+**P: ¿Qué son las Custom Deployment Protection Rules?**
+→ Son reglas de protección de environment implementadas mediante GitHub Apps. Permiten integrar sistemas externos (Jira, ServiceNow, PagerDuty) en el proceso de aprobación de deployments: la GitHub App recibe el evento y aprueba o rechaza el deployment via API.
+
+**P: ¿Cuál es la diferencia entre Required Reviewers y una Custom Deployment Protection Rule?**
+→ Required Reviewers requiere la aprobación manual de personas o equipos de GitHub. Las Custom Rules delegan la decisión en una GitHub App que puede implementar cualquier lógica externa (tickets, compliance, ventanas de cambio).
+
+**P: ¿Qué evita la opción `Prevent Self-Review` en un environment?**
+→ Evita que el usuario que disparó el workflow sea quien aprueba su propio deployment. Garantiza que la aprobación la dé una persona diferente (four-eyes principle).
+
+**P: ¿Los administradores del repositorio pueden saltarse las protection rules de un environment por defecto?**
+→ Sí. Por defecto, `Allow administrators to bypass` está activado. Se puede desactivar para que incluso los admins deban pasar por el proceso de aprobación — útil en entornos regulados.
+
+**P: ¿Qué ocurre con los secrets y variables de un environment cuando este se elimina?**
+→ Se eliminan permanentemente todos los secrets, variables y protection rules del environment. No se pueden recuperar. Además, cualquier job que estuviera esperando aprobación de ese environment falla automáticamente.

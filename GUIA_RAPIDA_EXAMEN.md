@@ -15,16 +15,17 @@
 | Documento | Temas clave |
 |-----------|-------------|
 | [`ARQUITECTURA_TECNICA.md`](ARQUITECTURA_TECNICA.md) | Jerarquía workflow→job→step, ciclo de vida, eventos internos, runners, ciclo de ejecución |
-| [`CONTEXTOS.md`](CONTEXTOS.md) | `github.*`, `env`, `job`, `steps`, `runner`, `secrets`, `vars`, `strategy`, `matrix`, `needs`, `inputs`, arrays `.*` |
-| [`EVENTOS.md`](EVENTOS.md) | `push`, `pull_request`, `pull_request_target`, `schedule`, `workflow_dispatch`, `workflow_call`, `workflow_run`, filtros |
+| [`CONTEXTOS.md`](CONTEXTOS.md) | `github.*`, `env`, `job`, `steps`, `runner`, `secrets`, `vars`, `strategy`, `matrix`, `needs`, `inputs`, arrays `.*`, **jobs** context (reusable workflows), **runner.environment**, **runner.debug** |
+| [`EVENTOS.md`](EVENTOS.md) | `push`, `pull_request`, `pull_request_target`, `schedule`, `workflow_dispatch`, `workflow_call`, `workflow_run`, filtros, **[skip ci]**, merge_group, discussion, check_run, timezone en schedule |
 | [`EXPRESIONES.md`](EXPRESIONES.md) | `${{ }}`, operadores, `contains/startsWith/endsWith/format/join/toJSON/fromJSON/hashFiles`, `success/failure/always/cancelled` |
-| [`JOBS_AVANZADOS.md`](JOBS_AVANZADOS.md) | Outputs `GITHUB_OUTPUT→job→needs`, `GITHUB_ENV/PATH/STEP_SUMMARY`, concurrency, permissions, matrix, containers, services, `if:` |
+| [`JOBS_AVANZADOS.md`](JOBS_AVANZADOS.md) | Outputs `GITHUB_OUTPUT→job→needs`, `GITHUB_ENV/PATH/STEP_SUMMARY`, concurrency, permissions, matrix, containers, services, `if:`, **run-name**, **defaults**, **environment.url**, **YAML anchors**, timeouts |
 | [`WORKFLOWS_REUTILIZABLES.md`](WORKFLOWS_REUTILIZABLES.md) | `workflow_call`, inputs tipados, outputs de workflow, `secrets: inherit`, 7 limitaciones |
-| [`ACTIONS_PERSONALIZADAS.md`](ACTIONS_PERSONALIZADAS.md) | Composite (`shell:` obligatorio), JavaScript (ncc, `@actions/core`), Docker, Marketplace |
-| [`SEGURIDAD_AVANZADA.md`](SEGURIDAD_AVANZADA.md) | `GITHUB_TOKEN` scopes, secrets 3 niveles, OIDC, `pull_request_target`, SHA pinning, script injection, Check Runs, CodeQL, `github-script` |
-| [`CACHE_ARTIFACTS_DEPLOYMENT.md`](CACHE_ARTIFACTS_DEPLOYMENT.md) | `actions/cache`, key/restore-keys, artifacts, Environments, Pages, GHCR, Dependabot |
-| [`RUNNERS_DEBUGGING.md`](RUNNERS_DEBUGGING.md) | GitHub-hosted specs, self-hosted, runners efímeros (`--ephemeral`), ARC/K8s, facturación/límites por plan, debug logging, `act` |
-| [`ADMINISTRACION_Y_CICD.md`](ADMINISTRACION_Y_CICD.md) | Políticas de org, `workflow_run`, GitFlow, testing avanzado, release-please, Slack/Teams, Docker multi-stage |
+| [`ACTIONS_PERSONALIZADAS.md`](ACTIONS_PERSONALIZADAS.md) | Composite (`shell:` obligatorio), JavaScript (ncc, `@actions/core`), Docker, Marketplace, **versionado semántico** (`@v4` vs SHA), **testing con Jest** |
+| [`SEGURIDAD_AVANZADA.md`](SEGURIDAD_AVANZADA.md) | `GITHUB_TOKEN` scopes, secrets 3 niveles, OIDC, `pull_request_target`, SHA pinning, script injection, Check Runs, CodeQL, `github-script`, **artifact attestations** (actions/attest), **::add-mask::**, OpenSSF Scorecards, límites secrets |
+| [`CACHE_ARTIFACTS_DEPLOYMENT.md`](CACHE_ARTIFACTS_DEPLOYMENT.md) | `actions/cache`, key/restore-keys, artifacts, Environments, Pages, GHCR, Dependabot, límites caché (10GB/7días/rate limits), **auto-caching** en setup actions, **inmutabilidad artifacts v4** |
+| [`RUNNERS_DEBUGGING.md`](RUNNERS_DEBUGGING.md) | GitHub-hosted specs, self-hosted, runners efímeros (`--ephemeral`), ARC/K8s, facturación/límites por plan, debug logging, `act`, **larger runners**, **IP allowlists** |
+| [`ADMINISTRACION_Y_CICD.md`](ADMINISTRACION_Y_CICD.md) | Políticas de org, `workflow_run`, GitFlow, testing avanzado, release-please, Slack/Teams, Docker multi-stage, **required workflows**, **audit logs**, **variables de org/repo** |
+| [`WORKFLOW_COMMANDS.md`](WORKFLOW_COMMANDS.md) | `::debug::`, `::notice::`, `::warning::`, `::error::`, `::group::`, **`::add-mask::`**, `::stop-commands::`, **GITHUB_STATE**, tabla comparativa de environment files |
 
 ---
 
@@ -501,4 +502,125 @@ Caller → Callee1 → Callee2 → Callee3 → Callee4 → ❌ ERROR (máx 4 niv
 
 **P: ¿Qué scope necesita GITHUB_TOKEN para que `dorny/test-reporter` publique annotations?**
 → `checks: write`
+
+### Required Workflows, Audit Logs y Variables
+
+**P: ¿Qué son los required workflows y en qué se diferencian de los required checks de branch protection?**
+→ Los required workflows se configuran a nivel de **organización** y se añaden automáticamente a todos los repos como checks obligatorios sin que cada repo los defina. Los required checks de branch protection se configuran en cada repo individualmente y referencian checks ya existentes en ese repo.
+
+**P: ¿Con qué código se ejecuta un required workflow cuando se dispara un PR en un repositorio destino?**
+→ Con el código del **repositorio destino** (el repo donde se abre el PR), no con el del repositorio donde está definido el workflow.
+
+**P: ¿Cuánto tiempo se retienen los audit logs de Actions en los distintos planes?**
+→ Free/Team: 90 días. Enterprise Cloud: 180 días. Con audit log streaming (Enterprise): indefinido.
+
+**P: ¿Qué información NO queda registrada en los audit logs cuando se modifica un secret?**
+→ El valor del secret. Solo se registra el evento (creación/actualización/eliminación) y el nombre.
+
+**P: ¿Qué diferencia hay entre `secrets.*` y `vars.*`?**
+→ `secrets.*` están encriptados y nunca aparecen en los logs (se maskean). `vars.*` no están encriptados y son visibles en los logs. `vars.*` se usa para configuración no sensible (URLs, nombres de entorno, flags).
+
+**P: Si `vars.APP_NAME` está definido a nivel de organización y también a nivel de repositorio, ¿cuál gana?**
+→ El del repositorio — el nivel más específico (repo > org) sobreescribe al más general.
+
+### Larger Runners y Versionado de Actions
+
+**P: ¿Qué plan se necesita para usar `runs-on: ubuntu-latest-8-cores`?**
+→ Plan Team o Enterprise Cloud.
+
+**P: ¿Cuántos minutos de facturación consume un job de 5 minutos en un runner de 32 cores Linux (repo privado)?**
+→ 80 minutos (multiplicador ×16 para 32 cores × 5 minutos).
+
+**P: ¿Cuál es la diferencia de seguridad entre referenciar una action con `@v4` vs `@SHA`?**
+→ `@v4` es un tag mutable — el autor puede moverlo con force push para apuntar a código diferente. `@SHA` es un commit inmutable — garantiza que siempre se ejecuta exactamente ese código, incluso si el tag se mueve.
+
+**P: ¿Por qué hay que hacer commit del directorio `dist/` en una JavaScript action?**
+→ GitHub ejecuta directamente el archivo compilado (`dist/index.js`) indicado en `action.yml`. No ejecuta `npm install` ni compila en tiempo de ejecución.
+
+**P: ¿Qué convención de tags usan las actions de GitHub para el versionado mayor (ej: `@v4`)?**
+→ Un **tag móvil** que el autor actualiza con `git tag -fa v4 && git push origin v4 --force` en cada release para que apunte siempre al último patch de esa versión mayor.
+
+**P: ¿Cómo se puede automatizar la actualización de versiones de actions en los workflows?**
+→ Configurando Dependabot con `package-ecosystem: github-actions` en `.github/dependabot.yml`. Crea PRs automáticos cuando hay nuevas versiones.
+
+### Workflow Commands
+
+**P: ¿Cuál es la diferencia entre `::warning::` y `::error::` en los logs?**
+→ Ambos crean anotaciones visibles en la UI y en los diffs de PR. `::error::` marca el step como fallido si se usa con `exit 1`; sin `exit 1`, ambos son solo informativos. `::error::` aparece destacado en rojo, `::warning::` en amarillo.
+
+**P: ¿Qué hace `::group::nombre` y `::endgroup::` en los logs?**
+→ Crean una sección plegable en el log del runner. El contenido entre ambos comandos se muestra colapsado por defecto en la UI de Actions y se puede expandir con un click.
+
+**P: ¿Cuándo hay que usar `::add-mask::` si los secrets ya se enmascaran solos?**
+→ Los secrets configurados en GitHub se enmascaran automáticamente, pero valores calculados en runtime (JWTs generados, tokens temporales, valores derivados de secrets) NO se enmascaran. Hay que usar `::add-mask::` para estos valores dinámicos, ejecutándolo ANTES de cualquier step que los use.
+
+**P: ¿Qué es `GITHUB_STATE` y cuándo se usa?**
+→ Un environment file que permite compartir valores entre las fases `pre:` y `post:` de una JavaScript action. Se escribe en `pre:` con `echo "KEY=val" >> $GITHUB_STATE` y se lee en `post:` como `$STATE_KEY`.
+
+**P: ¿Qué diferencia hay entre `GITHUB_OUTPUT` y `GITHUB_ENV`?**
+→ `GITHUB_OUTPUT` crea outputs del step accesibles via `${{ steps.id.outputs.key }}` (requiere `id:` en el step). `GITHUB_ENV` define variables de entorno bash accesibles como `$VAR` en steps siguientes. `GITHUB_OUTPUT` es el mecanismo correcto para pasar datos a otros jobs via `outputs:`.
+
+**P: ¿Dónde aparece el contenido escrito en `GITHUB_STEP_SUMMARY`?**
+→ En la pestaña "Summary" de la ejecución del workflow en la UI de GitHub Actions. Acepta Markdown completo. Límite: 1 MB por step, 20 MB por job.
+
+### Triggers y gestión de runs
+
+**P: ¿Qué palabras clave en un mensaje de commit evitan que se dispare el workflow?**
+→ `[skip ci]`, `[ci skip]`, `[no ci]`, `[skip actions]`, `[actions skip]`, o el trailer `skip-checks: true`. Solo aplica a `push` y `pull_request`, no a `workflow_dispatch` ni `schedule`.
+
+**P: ¿Para qué sirve el trigger `merge_group` y cuál es su único tipo de actividad?**
+→ Se dispara cuando un PR entra en la merge queue para ejecutar checks de CI sobre el estado combinado. Su único tipo de actividad es `checks_requested`.
+
+**P: ¿Qué zona horaria usa `schedule` si no se especifica el campo `timezone`?**
+→ UTC (comportamiento por defecto). Con `timezone: 'Europe/Madrid'` se puede especificar cualquier zona horaria IANA.
+
+**P: ¿Cómo se re-ejecutan solo los jobs fallidos de un workflow?**
+→ Con `gh run rerun RUN_ID --failed` o desde la UI con el botón "Re-run failed jobs". Los re-runs usan el mismo SHA y ref que el run original y están disponibles hasta 30 días después.
+
+### Sintaxis avanzada
+
+**P: ¿Para qué sirve `run-name` en un workflow y en qué se diferencia de `name`?**
+→ `name` es el nombre del workflow (aparece en la lista de workflows). `run-name` personaliza el nombre de cada ejecución individual (aparece en el historial de runs). Soporta expresiones: `run-name: Deploy ${{ github.ref_name }} by ${{ github.actor }}`.
+
+**P: ¿Qué hace `defaults.run.shell` a nivel de workflow?**
+→ Establece el shell por defecto para todos los steps `run:` del workflow, evitando repetirlo en cada step. Puede sobreescribirse a nivel de job o de step individual.
+
+**P: ¿Cuál es la limitación principal de los YAML anchors frente a las composite actions?**
+→ Los YAML anchors solo funcionan dentro del mismo archivo YAML. Las composite actions son reutilizables entre múltiples repositorios, versionables con tags, y aparecen como una sola unidad en los logs.
+
+### Caché y artifacts avanzado
+
+**P: ¿Qué ocurre cuando un repositorio supera el límite de 10 GB de caché?**
+→ La caché entra en modo solo lectura: los jobs pueden leer caches existentes pero no pueden escribir nuevas entradas. Las caches antiguas se eliminan por LRU para liberar espacio.
+
+**P: ¿Qué es `enableCrossOsArchive` en `actions/cache` y cuándo se usa?**
+→ Permite que runners de Windows compartan cache con Linux/macOS. Por defecto es `false` porque los binarios no son compatibles entre sistemas. Solo útil para caches de datos independientes del OS (archivos JSON, imágenes, etc.).
+
+**P: ¿Por qué no se puede subir dos artifacts con el mismo nombre en el mismo run en `actions/upload-artifact@v4`?**
+→ En v4 los artifacts son inmutables dentro del mismo run. Para jobs en paralelo que generan el mismo tipo de artifact (ej: resultados de tests en matrix), cada job debe usar un nombre único (ej: `test-results-${{ matrix.os }}`).
+
+**P: ¿Qué parámetro de `actions/setup-node` activa el auto-caching de npm?**
+→ `cache: 'npm'`. También soporta `'yarn'` y `'pnpm'`. Elimina la necesidad de usar `actions/cache` manualmente para node_modules.
+
+### Seguridad avanzada
+
+**P: ¿Qué son las artifact attestations y para qué sirven?**
+→ Son firmas digitales (basadas en Sigstore/Rekor) que verifican dónde y cómo se construyó un binario o imagen. Permiten verificar la procedencia del software con `gh attestation verify`. Se generan con `actions/attest-build-provenance` o `actions/attest-sbom`.
+
+**P: ¿Qué permisos necesita un workflow para generar artifact attestations?**
+→ `id-token: write`, `contents: read`, `attestations: write`. Para container images también `packages: write`.
+
+**P: ¿Pueden pasarse secrets de environment via `workflow_call`?**
+→ No. Los secrets de environment no se pueden pasar a workflows reutilizables via `workflow_call`. Solo los secrets de repositorio y organización se pueden pasar explícitamente o con `secrets: inherit`.
+
+**P: ¿Cuál es el límite de tamaño por secret y cuántos secrets puede tener una organización?**
+→ Máximo 48 KB por secret. Máximo 1.000 secrets por organización.
+
+### Contextos avanzados
+
+**P: ¿Qué diferencia hay entre el contexto `needs` y el contexto `jobs` en un workflow reutilizable?**
+→ `needs` solo permite acceder a outputs de los jobs de los que depende directamente el job actual. `jobs` (disponible solo en reusable workflows) permite acceder a outputs de TODOS los jobs del workflow, independientemente de dependencias directas. Se usa en la sección `outputs:` del `workflow_call`.
+
+**P: ¿Qué valores puede tener `runner.environment` y cuándo es útil?**
+→ `'github-hosted'` para runners gestionados por GitHub, `'self-hosted'` para runners propios. Útil para steps condicionales que solo deben ejecutarse en uno u otro tipo: `if: runner.environment == 'self-hosted'`.
 
