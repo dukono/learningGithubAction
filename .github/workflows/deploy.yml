@@ -11,13 +11,11 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
-
       - name: Build y test
         run: |
           cd app
@@ -38,7 +36,7 @@ jobs:
           file: app/dockerfile
           context: app
           push: true
-          tags: ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}
+          tags: ghcr.io/${{ env.REPO_LC }}
 
 #  deploy:
 #    needs: build
