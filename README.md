@@ -68,6 +68,17 @@ BLOQUE 4 — ECOSISTEMA (completar formación)
         annotations), versionado semántico (release-please),
         notificaciones Slack/Teams, Docker multi-stage + layer cache.
 
+BLOQUE 5 — GAPS AVANZADOS (cobertura completa)
+  ├── WORKFLOW_COMMANDS.md
+  │     Comandos ::debug::, ::notice::, ::warning::, ::error::,
+  │     ::group::, ::add-mask::, ::stop-commands::,
+  │     GITHUB_STATE, equivalentes en @actions/core.
+  │
+  └── WORKFLOW_TEMPLATES.md
+        Starter Workflows para organizaciones, Custom Deployment
+        Protection Rules, Prevent Self-Review, JIT runners,
+        run-name, merge_group trigger.
+
 REFERENCIA RÁPIDA (para examen/consulta)
   └── GUIA_RAPIDA_EXAMEN.md
         Cheatsheet completo, flujos de datos visuales,
@@ -130,4 +141,6 @@ Todos en `.github/workflows/`. Dispáralos con **workflow_dispatch** desde la pe
 | [`CACHE_ARTIFACTS_DEPLOYMENT.md`](CACHE_ARTIFACTS_DEPLOYMENT.md) | actions/cache, key/restore-keys, artifacts upload/download, Environments, Pages, GHCR, Dependabot |
 | [`RUNNERS_DEBUGGING.md`](RUNNERS_DEBUGGING.md) | GitHub-hosted specs/multiplicadores, self-hosted, runners efímeros (--ephemeral), ARC/K8s, facturación y límites, runner groups, gh CLI, ACTIONS_STEP_DEBUG, tmate, act |
 | [`ADMINISTRACION_Y_CICD.md`](ADMINISTRACION_Y_CICD.md) | Políticas de org (allowed actions, fork approvals), workflow_run, GitFlow, testing avanzado, release-please, Slack/Teams, Docker multi-stage + layer cache |
+| [`WORKFLOW_COMMANDS.md`](WORKFLOW_COMMANDS.md) | `::debug::`, `::notice::`, `::warning::`, `::error::`, `::group::`, `::add-mask::`, `::stop-commands::`, GITHUB_STATE, equivalentes JS |
+| [`WORKFLOW_TEMPLATES.md`](WORKFLOW_TEMPLATES.md) | Starter Workflows de org, Custom Deployment Protection Rules, Prevent Self-Review, JIT runners, `run-name`, `merge_group` |
 | [`GUIA_RAPIDA_EXAMEN.md`](GUIA_RAPIDA_EXAMEN.md) | ⭐ Cheatsheet + flujos de datos + errores comunes + preguntas tipo certificación |

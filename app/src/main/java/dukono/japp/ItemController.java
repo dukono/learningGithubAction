@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 public class ItemController {
     
     @PostMapping()
-    public ResponseEntity<String> getById(@RequestBody String request) {
+    public ResponseEntity<String> getById(@RequestBody String reques) {
         return ResponseEntity.ok("{ id: Hola }");
     }
 }
