@@ -16,7 +16,9 @@ jobs:
           cache: 'maven'
 
       - name: Build y test
-        run: mvn -B package
+        run: |
+          cd app
+          mvn -B package
 
       - name: Login a GitHub Container Registry
         uses: docker/login-action@v4
