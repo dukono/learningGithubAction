@@ -36,7 +36,7 @@ jobs:
           file: app/dockerfile
           context: app
           push: true
-          tags: ghcr.io/${{ env.REPO_LC }}
+          tags: ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}
 
   deploy:
     needs: build
@@ -51,5 +51,5 @@ jobs:
           northflank-api-key: ${{ secrets.NORTHFLANK_API_KEY }}
           project-id: ${{ secrets.NORTHFLANK_PROJECT_ID }}
           service-id: ${{ secrets.NORTHFLANK_SERVICE_ID }}
-          image-path: ghcr.io/${{ env.REPO_LC }}
+          image-path: ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}
           credentials-id: ${{ secrets.NORTHFLANK_CREDENTIALS_ID }}
