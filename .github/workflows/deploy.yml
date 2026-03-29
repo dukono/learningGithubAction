@@ -26,13 +26,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
+      - name: Preparar nombre de repositorio en minúsculas
+        run: |
+          echo "REPO_LC=${GITHUB_REPOSITORY@L}" >> ${GITHUB_ENV}
       - name: Build y Push imagen Docker
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          tags: ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}
 
 #  deploy:
 #    needs: build
