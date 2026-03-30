@@ -8,4 +8,4 @@ management:
         include: refresh
         
 application:
-  prop: 1
+  prop: "prod"
