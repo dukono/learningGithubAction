@@ -1,3 +1,11 @@
 spring:
   application:
     name: App
+management:
+  endpoints:
+    web:
+      exposure:
+        include: refresh
+        
+application:
+  prop: 1
