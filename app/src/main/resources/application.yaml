@@ -1,11 +1,16 @@
 spring:
   application:
     name: App
+  config:
+    import: "configtree:/etc/config/secrets/"
 management:
   endpoints:
     web:
       exposure:
-        include: refresh
-        
+        include: health,info,refresh # Añade 'refresh' aquí
+  endpoint:
+    health:
+      show-details: always
+
 application:
-  prop: "prod"
+  prop: 'stage'
