@@ -8,4 +8,4 @@ management:
         include: refresh
         
 application:
-  prop: "prod"
+  prop: 'stage'
