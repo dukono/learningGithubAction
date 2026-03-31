@@ -2,7 +2,7 @@ spring:
   application:
     name: App
   config:
-    import: "configtree:/etc/config/secrets/"
+    import: "configtree:/etc/config/"
 management:
   endpoints:
     web:
