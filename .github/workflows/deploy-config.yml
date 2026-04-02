@@ -1,4 +1,4 @@
-name: CI/CD Maven - Northflank
+name: CI/CD Maven - Config
 on:
   push:
     branches: [main]
@@ -34,7 +34,7 @@ jobs:
       - name: Build y Push imagen Docker
         uses: docker/build-push-action@v7
         with:
-          file: config-server/dockerfile
+          file: config-server/Dockerfile
           context: config-server
           push: true
           tags: ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}
