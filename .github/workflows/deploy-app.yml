@@ -6,7 +6,7 @@ on:
       - app/**
       - .github/workflows/deploy-app.yml
 env:
-  NAME: "App"
+  NAME: "app"
 jobs:
   build:
     runs-on: ubuntu-latest
