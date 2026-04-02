@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Preparar nombre de repositorio en minúsculas
         run: |
-          echo "DEPLOY_TAG=ghcr.io/${{ env.NAME }}/${GITHUB_REPOSITORY@L}:${{ github.sha }}" >> ${GITHUB_ENV}
+          echo "DEPLOY_TAG=ghcr.io/${GITHUB_REPOSITORY@L}-${{ env.NAME }}:${{ github.sha }}" >> ${GITHUB_ENV}
       - name: Mostrar variables de entorno
         run: |
           echo "DEPLOY_TAG: ${{ env.DEPLOY_TAG }}"
