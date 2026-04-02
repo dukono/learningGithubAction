@@ -50,9 +50,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Preparar nombre de repositorio en minúsculas
-        run: echo "REPO_LC=${GITHUB_REPOSITORY@L}" >> ${GITHUB_ENV}
-
       - name: Deploy en Northflank
         uses: northflank/deploy-to-northflank@v1
         with:
