@@ -19,6 +19,7 @@ jobs:
           echo "REPO_LC=${GITHUB_REPOSITORY@L}" >> ${GITHUB_ENV}
           echo "DEPLOY_TAG=ghcr.io/${{env.NAME}}/${{env.REPO_LC}}:${{ github.sha }}" >> ${GITHUB_ENV}
           echo DEPLOY_TAG:${{env.GITHUB_ENV}}
+          echo REPO_LC:${{env.REPO_LC}}
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
         with:
