@@ -47,6 +47,7 @@ public class DynamicGitEnvironmentRepository implements EnvironmentRepository {
 
 	@Override
 	public Environment findOne(final String application, final String profile, final String label) {
+		log.info("findOne app:'{}', profile:'{}',label:'{}'", application, profile, label);
 		final String uri = this.springEnv.getProperty(URI_PREFIX + application);
 		if (uri == null || uri.isBlank()) {
 			// No hay repo registrado para esta app (ej: el health-check interno llama
@@ -62,17 +63,11 @@ public class DynamicGitEnvironmentRepository implements EnvironmentRepository {
 
 	private MultipleJGitEnvironmentRepository buildRepo(final String appName) {
 		final String uri = this.springEnv.getProperty(URI_PREFIX + appName);
-		if (uri == null || uri.isBlank()) {
-			throw new IllegalStateException("No hay repo configurado para la aplicación '" + appName + "'. "
-					+ "Define la variable de entorno: " + URI_PREFIX + appName);
-		}
 
 		final String token = this.springEnv.getProperty("GIT_TOKEN_" + appName, "");
 		final String username = this.springEnv.getProperty("GIT_USERNAME_" + appName, "");
 		final String branch = this.springEnv.getProperty("GIT_BRANCH_" + appName, "main");
 		final String path = this.springEnv.getProperty("GIT_PATH_" + appName, "config");
-
-		log.info("Construyendo repo Git para '{}': uri={}, branch={}", appName, uri, branch);
 
 		final MultipleJGitEnvironmentProperties props = new MultipleJGitEnvironmentProperties();
 		props.setUri(uri);
@@ -82,7 +77,8 @@ public class DynamicGitEnvironmentRepository implements EnvironmentRepository {
 		props.setSearchPaths(path);
 		props.setForcePull(true);
 		props.setCloneOnStart(false);
-
+		log.info("findOne token:'{}'username;'{}',branch;'{}',path:'{}'", token.substring(0, 4), username, branch,
+				path);
 		final MultipleJGitEnvironmentRepository repo = new MultipleJGitEnvironmentRepository(this.springEnv, props,
 				this.observationRegistry);
 		try {
