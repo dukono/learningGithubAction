@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - config-server/**
+      - .github/workflows/deploy-config.yml
 jobs:
   build:
     runs-on: ubuntu-latest
