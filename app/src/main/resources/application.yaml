@@ -3,6 +3,10 @@ spring:
     name: App
   config:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://config-server:8888}"
+  cloud:
+    config:
+      username: admin
+      password: secret
 management:
   endpoints:
     web:
