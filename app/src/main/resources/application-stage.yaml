@@ -2,7 +2,7 @@ spring:
   application:
     name: App
   config:
-    import: "configtree:/etc/config/secrets/"
+    import: "optional:file:/etc/config/secrets.yml"
 
 
 management:

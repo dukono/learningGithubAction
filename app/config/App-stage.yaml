@@ -1,0 +1,3 @@
+application:
+  prop: 'valor-desde-config-server-STAGE'
+

@@ -2,7 +2,8 @@ name: CI/CD Maven - Northflank
 on:
   push:
     branches: [main]
-
+    paths:
+      - app/**
 jobs:
   build:
     runs-on: ubuntu-latest
