@@ -3,7 +3,9 @@ on:
   push:
     branches: [main]
     paths:
-      - app/**
+      - app/src
+      - pom.xml
+      - dockerfile
       - .github/workflows/deploy-app.yml
 env:
   NAME: "app"

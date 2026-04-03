@@ -3,9 +3,10 @@ on:
   push:
     branches: [main]
     paths:
-      - config-server/**
+      - config-server/src
+      - pom.xml
+      - dockerfile
       - .github/workflows/deploy-config.yml
-
 env:
   NAME: "config"
 jobs:
