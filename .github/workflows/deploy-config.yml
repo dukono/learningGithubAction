@@ -7,14 +7,12 @@ on:
       - pom.xml
       - dockerfile
       - .github/workflows/deploy-config.yml
-env:
-  NAME: "config"
 
 jobs:
   prepare:
     uses: ./.github/workflows/reusable.yml
     with:
-      NAME: ${{ env.NAME }}
+      NAME: "config"
   build:
     needs: prepare
     runs-on: ubuntu-latest

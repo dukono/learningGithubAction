@@ -1,10 +1,9 @@
-name: Event - Fork / Star / Member Info
+name: Event - Fork / Watch(Star) / Member Info
 on:
   fork:
-  star:
+  watch:
     types:
-      - created
-      - deleted
+      - started
   member:
     types:
       - added
@@ -34,12 +33,13 @@ jobs:
           echo "forkee.owner.id":               "${{ github.event.forkee.owner.id }}"
           echo "forkee.created_at":             "${{ github.event.forkee.created_at }}"
 
-      - name: star-info
-        if: github.event_name == 'star'
+      - name: watch-info
+        if: github.event_name == 'watch'
         run: |
-          echo "=== STAR INFO ==="
-          echo "action (created/deleted)":      "${{ github.event.action }}"
-          echo "starred_at":                    "${{ github.event.starred_at }}"
+          echo "=== WATCH (STAR) INFO ==="
+          echo "NOTA: 'watch' se dispara cuando alguien da estrella al repo"
+          echo "action (started)":              "${{ github.event.action }}"
+          echo "sender.login":                  "${{ github.event.sender.login }}"
 
       - name: member-info
         if: github.event_name == 'member'

@@ -15,7 +15,7 @@ jobs:
   prepare:
     uses: ./.github/workflows/reusable.yml
     with:
-      NAME: ${{ env.NAME }}
+      NAME: "app"
 
   build:
     needs: prepare
