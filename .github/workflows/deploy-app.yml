@@ -7,28 +7,33 @@ on:
       - pom.xml
       - dockerfile
       - .github/workflows/deploy-app.yml
+
 env:
   NAME: "app"
+
 jobs:
+  prepare:
+    uses: ./.github/workflows/reusable.yml
+    with:
+      NAME: ${{ env.NAME}}
+
   build:
+    needs: prepare
     runs-on: ubuntu-latest
     outputs:
-      DEPLOY_TAG: ${{ steps.deploy-tag.outputs.DEPLOY_TAG }}
+      DEPLOY_TAG: ${{ needs.prepare.outputs.DEPLOY_TAG }}
     permissions:
       contents: write
       packages: write
     steps:
-      - name: Preparar nombre de repositorio en minúsculas
-        id: deploy-tag
-        run: |
-          echo "DEPLOY_TAG=ghcr.io/${GITHUB_REPOSITORY@L}-${{ env.NAME }}:${{ github.sha }}" >> ${GITHUB_ENV}
-          echo "DEPLOY_TAG=ghcr.io/${GITHUB_REPOSITORY@L}-${{ env.NAME }}:${{ github.sha }}" >> ${GITHUB_OUTPUT}
       - uses: actions/checkout@v6
+
       - uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
+
       - name: Build y test
         run: |
           cd app
@@ -40,13 +45,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build y Push imagen Docker
         uses: docker/build-push-action@v7
         with:
           file: app/dockerfile
           context: app
           push: true
-          tags: ${{ env.DEPLOY_TAG }}
+          tags: ${{ needs.prepare.outputs.DEPLOY_TAG }}
 
   deploy:
     needs: build

@@ -8,13 +8,14 @@
 5. [Versionado Semántico Automático](#5-versionado-semántico-automático)
 6. [Notificaciones Externas (Slack, Teams)](#6-notificaciones-externas)
 7. [Docker Avanzado: Multi-stage y Layer Cache](#7-docker-avanzado)
-8. [Required Workflows](#8-required-workflows)
-9. [Audit Logs de GitHub Actions](#9-audit-logs-de-github-actions)
-10. [Variables de Organización y Repositorio](#10-variables-de-organización-y-repositorio)
-11. [Workflow Templates (Starter Workflows)](#11-workflow-templates-starter-workflows)
-12. [Custom Deployment Protection Rules](#12-custom-deployment-protection-rules)
-13. [Opciones Adicionales de Environments](#13-opciones-adicionales-de-environments)
-14. [Preguntas de Examen](#14-preguntas-de-examen)
+8. [Estrategias de Despliegue Avanzadas y Rollback](#8-estrategias-de-despliegue-avanzadas-y-rollback)
+9. [Required Workflows](#9-required-workflows)
+10. [Audit Logs de GitHub Actions](#10-audit-logs-de-github-actions)
+11. [Variables de Organización y Repositorio](#11-variables-de-organización-y-repositorio)
+12. [Workflow Templates (Starter Workflows)](#12-workflow-templates-starter-workflows)
+13. [Custom Deployment Protection Rules](#13-custom-deployment-protection-rules)
+14. [Opciones Adicionales de Environments](#14-opciones-adicionales-de-environments)
+15. [Preguntas de Examen](#15-preguntas-de-examen)
 
 ---
 
@@ -457,6 +458,138 @@ jobs:
 | Feature isolation | Por rama | Por feature flag |
 | Indicado para | Releases versionadas, software empaquetado | SaaS, apps web |
 
+### Patrón Release Candidate: rama `release/*`
+
+En GitFlow, cuando las funcionalidades del sprint están completas se crea una rama `release/*` para congelarlas y preparar la producción. Esta rama dispara su propio pipeline dedicado — distinto del de `develop` y del de `main`:
+
+```
+feature/* → develop → release/1.2.0 → main (tag v1.2.0)
+                              ↑
+              congelar features, tests de regresión, staging, UAT
+```
+
+```yaml
+# .github/workflows/cd-release.yml
+name: Release Candidate Pipeline
+
+on:
+  # Opción A: cuando se crea/actualiza la rama release/*
+  push:
+    branches:
+      - 'release/**'
+  # Opción B: cuando se publica un tag RC
+  push:
+    tags:
+      - 'v*-rc*'    # v1.2.0-rc1, v1.2.0-rc2 ...
+
+jobs:
+  build-rc:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extraer versión del nombre de rama o tag
+        id: ver
+        run: |
+          # Para rama: release/1.2.0  → version=1.2.0-rc
+          # Para tag:  v1.2.0-rc1     → version=1.2.0-rc1
+          REF="${GITHUB_REF#refs/*/}"
+          VERSION="${REF#release/}-rc"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Build de producción (optimizado, sin debug)
+        run: npm ci && npm run build:prod
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login a GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build y Push imagen RC
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ steps.ver.outputs.version }}
+            type=sha,prefix=rc-
+
+      - uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  regression-tests:
+    needs: build-rc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci && npm run test:regression   # suite completa
+
+  deploy-staging:
+    needs: regression-tests
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.example.com
+    steps:
+      - run: |
+          ./deploy.sh staging ghcr.io/${{ github.repository }}:${{ needs.build-rc.outputs.image-tag }}
+
+  # Gate manual: QA o Product Owner deben aprobar en la UI de GitHub
+  # antes de que este job se ejecute (configurado en el environment "uat")
+  approve-uat:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment:
+      name: uat          # ← Protection rule: Required reviewers configurado aquí
+    steps:
+      - name: Promover imagen a candidate
+        run: |
+          docker pull ghcr.io/${{ github.repository }}:${{ needs.build-rc.outputs.image-tag }}
+          docker tag  ghcr.io/${{ github.repository }}:${{ needs.build-rc.outputs.image-tag }} \
+                      ghcr.io/${{ github.repository }}:candidate
+          docker push ghcr.io/${{ github.repository }}:candidate
+          echo "## Release Candidate aprobado" >> $GITHUB_STEP_SUMMARY
+          echo "Imagen: \`ghcr.io/${{ github.repository }}:candidate\`" >> $GITHUB_STEP_SUMMARY
+          echo "Aprobado por: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+```
+
+**Flujo visual:**
+
+```
+push release/1.2.0
+  ↓
+build-rc    → imagen: ghcr.io/org/app:1.2.0-rc
+  ↓
+regression-tests
+  ↓
+deploy-staging  → auto deploy a staging
+  ↓
+approve-uat     ← PAUSA (espera aprobación de QA en GitHub UI)
+  ↓ (aprobado)
+imagen promovida a :candidate  → lista para cd-production.yml
+```
+
+**Diferencia clave con el pipeline de `develop`:**
+
+| | `develop` | `release/*` |
+|---|---|---|
+| Build | Con flags de debug | Optimizado (producción) |
+| Tests | Integración | Regresión completa |
+| Imagen tag | `develop-<sha>` | `1.2.0-rc`, `candidate` |
+| Gate | Automático | Aprobación manual (UAT) |
+| Secretos | Dev secrets | Staging/UAT secrets |
+
 ---
 
 ## 4. Testing Avanzado
@@ -640,6 +773,86 @@ jobs:
           path: results.xml
           reporter: java-junit
 ```
+
+### Smoke Tests contra entorno desplegado
+
+Los smoke tests (tests de humo) validan que el servicio recién desplegado responde correctamente **desde fuera**, atacando la URL real del entorno. Son ligeros (5–10 peticiones clave) y bloquean el pipeline si el entorno no está sano.
+
+```yaml
+  smoke-tests:
+    needs: deploy-staging          # Se ejecuta justo después del deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Esperar a que el entorno esté listo
+        run: |
+          # Reintentar hasta 60s antes de fallar
+          timeout 60 bash -c '
+            until curl -sf https://staging.example.com/health; do
+              echo "Esperando servicio..."; sleep 5
+            done'
+
+      - name: Smoke test: health check
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" https://staging.example.com/health)
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Health check falló: HTTP $STATUS"
+            exit 1
+          fi
+          echo "✅ Health check OK"
+
+      - name: Smoke test: endpoint principal
+        run: |
+          curl -sf https://staging.example.com/api/v1/ping \
+            -H "Authorization: Bearer ${{ secrets.STAGING_API_TOKEN }}" \
+            | jq '.status == "ok"'
+
+      - name: Smoke test: endpoint crítico de negocio
+        run: |
+          RESPONSE=$(curl -sf https://staging.example.com/api/v1/products?limit=1 \
+            -H "Authorization: Bearer ${{ secrets.STAGING_API_TOKEN }}")
+          echo "$RESPONSE" | jq '.data | length > 0'
+
+      - name: Publicar resultado en Job Summary
+        if: always()
+        run: |
+          echo "## Smoke Tests — Staging" >> $GITHUB_STEP_SUMMARY
+          echo "URL: https://staging.example.com" >> $GITHUB_STEP_SUMMARY
+          echo "SHA: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Resultado: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+```
+
+**Patrón con rollback automático si los smoke tests fallan:**
+
+```yaml
+  smoke-tests:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Smoke tests
+        id: smoke
+        run: |
+          curl -sf https://staging.example.com/health || exit 1
+          curl -sf https://staging.example.com/api/v1/ping || exit 1
+
+  rollback-on-failure:
+    needs: smoke-tests
+    if: failure()               # ← Solo si smoke-tests falló
+    runs-on: ubuntu-latest
+    steps:
+      - name: Revertir a versión anterior
+        run: |
+          # Obtener el artifact del run exitoso anterior
+          PREV_SHA=$(gh run list --workflow=cd-develop.yml --status=success \
+            --limit=2 --json headSha --jq '.[1].headSha')
+          ./deploy.sh staging ghcr.io/${{ github.repository }}:${PREV_SHA}
+          echo "⚠️ Rollback ejecutado a SHA: ${PREV_SHA}" >> $GITHUB_STEP_SUMMARY
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+> ⚠️ Los smoke tests deben ejecutarse **contra la URL real del entorno** desplegado, no contra localhost. Para ello la URL se obtiene del campo `url:` del environment o de un output del job de deploy.
 
 ---
 
@@ -1154,7 +1367,193 @@ En PRs puede interesar verificar que el Dockerfile compila sin subir la imagen:
 
 ---
 
-## 8. Required Workflows
+## 8. Estrategias de Despliegue Avanzadas y Rollback
+
+Las estrategias de despliegue controlan **cómo** se sustituye la versión antigua por la nueva en producción. El objetivo es minimizar el downtime y el riesgo: si algo falla, se puede revertir rápido y con impacto mínimo.
+
+```
+Sin estrategia (Big Bang):
+  versión antigua → STOP → versión nueva → START
+  Downtime garantizado + rollback = volver a desplegar
+
+Con estrategia:
+  old y new corren en paralelo → tráfico se mueve gradualmente
+  Si new falla → old sigue activo, rollback instantáneo
+```
+
+### Rolling Update
+
+Actualiza las instancias (pods/containers) **de una en una** o en pequeños grupos. En Kubernetes es la estrategia por defecto.
+
+```
+Instancia 1: v1 → v2  ✅
+Instancia 2: v1 → v2  ✅
+Instancia 3: v1 → v2  ✅   ← Si falla aquí, se para y se revierte
+```
+
+```yaml
+  deploy-rolling:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Rolling update en Kubernetes
+        run: |
+          kubectl set image deployment/my-app \
+            app=ghcr.io/${{ github.repository }}:${{ needs.build.outputs.image-tag }} \
+            --record
+
+          # Esperar a que el rollout complete (con timeout)
+          kubectl rollout status deployment/my-app --timeout=5m
+
+      - name: Verificar health tras rollout
+        id: health-check
+        run: |
+          sleep 15   # Grace period
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" https://app.example.com/health)
+          echo "status=${STATUS}" >> $GITHUB_OUTPUT
+          [ "$STATUS" = "200" ] || exit 1
+
+      - name: Rollback si health check falla
+        if: failure() && steps.health-check.conclusion == 'failure'
+        run: |
+          kubectl rollout undo deployment/my-app
+          echo "⚠️ Rollback ejecutado automáticamente" >> $GITHUB_STEP_SUMMARY
+```
+
+### Blue/Green
+
+Mantiene **dos entornos idénticos** (blue = activo, green = nuevo). El tráfico cambia de golpe del blue al green. El blue queda en stand-by para rollback instantáneo.
+
+```
+           ┌─────────────┐
+Load       │  Blue (v1)  │ ← activo hasta el switch
+Balancer → ├─────────────┤
+           │  Green (v2) │ ← recibe tráfico 0% hasta que se aprueba
+           └─────────────┘
+
+Switch → Load Balancer apunta a Green
+Rollback → Load Balancer vuelve a Blue (< 1 segundo)
+```
+
+```yaml
+  deploy-blue-green:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Determinar slot activo
+        id: slot
+        run: |
+          ACTIVE=$(kubectl get svc my-app-svc -o jsonpath='{.spec.selector.slot}')
+          INACTIVE=$([ "$ACTIVE" = "blue" ] && echo "green" || echo "blue")
+          echo "active=${ACTIVE}" >> $GITHUB_OUTPUT
+          echo "inactive=${INACTIVE}" >> $GITHUB_OUTPUT
+
+      - name: Desplegar en slot inactivo
+        run: |
+          kubectl set image deployment/my-app-${{ steps.slot.outputs.inactive }} \
+            app=ghcr.io/${{ github.repository }}:${{ needs.build.outputs.image-tag }}
+          kubectl rollout status deployment/my-app-${{ steps.slot.outputs.inactive }} --timeout=5m
+
+      - name: Smoke tests contra slot inactivo
+        run: |
+          # El slot inactivo tiene su propia URL interna para testing pre-switch
+          curl -sf https://${{ steps.slot.outputs.inactive }}.internal.example.com/health
+
+      - name: Switch de tráfico al slot nuevo
+        run: |
+          kubectl patch svc my-app-svc \
+            -p '{"spec":{"selector":{"slot":"${{ steps.slot.outputs.inactive }}"}}}'
+          echo "Tráfico movido a: ${{ steps.slot.outputs.inactive }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verificar tras switch
+        id: post-switch
+        run: |
+          sleep 30
+          curl -sf https://app.example.com/health || exit 1
+
+      - name: Rollback automático si falla post-switch
+        if: failure() && steps.post-switch.conclusion == 'failure'
+        run: |
+          kubectl patch svc my-app-svc \
+            -p '{"spec":{"selector":{"slot":"${{ steps.slot.outputs.active }}"}}}'
+          echo "⚠️ Rollback a ${{ steps.slot.outputs.active }}" >> $GITHUB_STEP_SUMMARY
+```
+
+### Canary
+
+Despliega la nueva versión solo a un **porcentaje pequeño de usuarios** (ej. 10%). Se monitorean errores y latencia. Si todo va bien, se sube el porcentaje gradualmente.
+
+```
+100% tráfico → v1
+    ↓
+10% → v2, 90% → v1     (fase canary)
+    ↓
+50% → v2, 50% → v1     (si métricas OK)
+    ↓
+100% → v2              (promoción completa)
+```
+
+```yaml
+  canary-deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Desplegar canary (10% del tráfico)
+        run: |
+          # En Kubernetes: escalar el deployment canary a 1 réplica de 10 totales
+          kubectl scale deployment/my-app-canary --replicas=1
+          kubectl set image deployment/my-app-canary \
+            app=ghcr.io/${{ github.repository }}:${{ needs.build.outputs.image-tag }}
+          kubectl rollout status deployment/my-app-canary --timeout=5m
+
+      - name: Observar métricas durante 10 minutos
+        run: |
+          echo "Observando métricas del canary..."
+          sleep 600   # 10 min de soak time
+
+          # Consultar tasa de errores (ejemplo con Prometheus/Grafana API)
+          ERROR_RATE=$(curl -sf "${{ vars.PROMETHEUS_URL }}/api/v1/query" \
+            --data-urlencode 'query=rate(http_requests_total{status=~"5..",deployment="canary"}[5m])' \
+            | jq '.data.result[0].value[1] // "0"' -r)
+
+          echo "Tasa de errores canary: ${ERROR_RATE}"
+          # Fallar si error rate > 1%
+          awk "BEGIN { exit ($ERROR_RATE > 0.01) }"
+
+      - name: Promover canary al 100%
+        run: |
+          kubectl scale deployment/my-app-canary --replicas=0
+          kubectl set image deployment/my-app-stable \
+            app=ghcr.io/${{ github.repository }}:${{ needs.build.outputs.image-tag }}
+          kubectl rollout status deployment/my-app-stable --timeout=5m
+          echo "✅ Canary promovido al 100%" >> $GITHUB_STEP_SUMMARY
+
+      - name: Rollback si métricas fallan
+        if: failure()
+        run: |
+          kubectl scale deployment/my-app-canary --replicas=0
+          echo "⚠️ Canary retirado — versión estable activa" >> $GITHUB_STEP_SUMMARY
+```
+
+### Resumen comparativo
+
+| Estrategia | Downtime | Complejidad | Rollback | Indicada para |
+|---|---|---|---|---|
+| Rolling | Ninguno | Baja | Automático (`rollout undo`) | Apps stateless con varias réplicas |
+| Blue/Green | Ninguno | Media | Instantáneo (< 1s) | Cambios de BD, APIs con breaking changes |
+| Canary | Ninguno | Alta | Automático (retirar réplicas) | Alto riesgo, necesitas datos reales |
+
+> 💡 En GitHub Actions estas estrategias se orquestan con llamadas a `kubectl`, scripts de Helm, o herramientas como Argo Rollouts. GitHub solo gestiona el **cuándo** (triggers, gates, aprobaciones); el **cómo** lo decide el orquestador de la infraestructura.
+
+---
+
+## 9. Required Workflows
 
 Los **required workflows** son workflows configurados a nivel de organización que se añaden automáticamente como checks obligatorios en todos los repositorios (o en un subconjunto seleccionado). No es necesario modificar cada repositorio: el check aparece automáticamente en los pull requests.
 
@@ -1226,7 +1625,7 @@ jobs:
 
 ---
 
-## 9. Audit Logs de GitHub Actions
+## 10. Audit Logs de GitHub Actions
 
 Los **audit logs** registran todas las acciones administrativas relacionadas con GitHub Actions en una organización o empresa. Son esenciales para auditorías de seguridad y cumplimiento.
 
@@ -1283,9 +1682,94 @@ Enterprise Settings → Audit log → Log streaming
 → Configurar destino (S3, Azure Blob Storage, Google Cloud Storage, Splunk, Datadog)
 ```
 
+### Reporte de Auditoría por Deploy
+
+El audit log de GitHub registra **qué ocurrió** a nivel de organización, pero no genera por sí solo un reporte legible de "qué imagen está en producción ahora". Este patrón genera ese reporte al final de cada deploy, con trazabilidad completa.
+
+```yaml
+  audit-deploy:
+    needs: [deploy-production, smoke-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # Para escribir en el repositorio si se persiste
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Obtener aprobador del environment
+        id: approver
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Obtener revisiones del environment para este run
+            const reviews = await github.rest.actions.listEnvironmentApprovals({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            })
+            const approved = reviews.data.find(r => r.state === 'approved')
+            return approved ? approved.reviewer.login : 'auto-approved'
+          result-encoding: string
+
+      - name: Generar reporte de auditoría
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Reporte de Deploy — Producción
+
+          | Campo | Valor |
+          |---|---|
+          | Fecha | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |
+          | Entorno | production |
+          | Commit | \`${{ github.sha }}\` |
+          | Rama | \`${{ github.ref_name }}\` |
+          | Imagen | \`ghcr.io/${{ github.repository }}:${{ needs.deploy-production.outputs.image-tag }}\` |
+          | Aprobado por | ${{ steps.approver.outputs.result }} |
+          | Ejecutado por | ${{ github.actor }} |
+          | Run ID | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+          | Smoke tests | ${{ needs.smoke-tests.result }} |
+          EOF
+
+      - name: Persistir reporte en fichero del repo
+        run: |
+          mkdir -p audit/deploys
+          cat > audit/deploys/$(date -u '+%Y%m%d-%H%M%S')-production.json << EOF
+          {
+            "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+            "environment": "production",
+            "commit_sha": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "image_tag": "${{ needs.deploy-production.outputs.image-tag }}",
+            "approved_by": "${{ steps.approver.outputs.result }}",
+            "actor": "${{ github.actor }}",
+            "run_id": "${{ github.run_id }}",
+            "smoke_tests": "${{ needs.smoke-tests.result }}"
+          }
+          EOF
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add audit/
+          git commit -m "audit: deploy a production ${{ github.sha }}" || true
+          git push || true   # No falla el pipeline si el push no puede hacerse
+```
+
+**Qué información captura:**
+
+| Dato | Por qué importa |
+|---|---|
+| `commit_sha` | Trazabilidad exacta del código en producción |
+| `image_tag` | La imagen binaria que se está ejecutando, no solo el código |
+| `approved_by` | Quién dio el visto bueno (responsabilidad legal/SOC2) |
+| `actor` | Quién disparó el workflow |
+| `smoke_tests` | Si la verificación post-deploy tuvo éxito |
+| `run_id` | Link directo al log completo de la ejecución |
+
+> 💡 Para entornos regulados (SOC2, ISO 27001), este reporte combinado con el audit log de GitHub cubre los controles de **"evidencia de despliegue"** y **"aprobación de cambios en producción"**.
+
 ---
 
-## 10. Variables de Organización y Repositorio
+## 11. Variables de Organización y Repositorio
 
 Las **variables** (`vars.*`) son valores de configuración no sensibles que pueden definirse a tres niveles y heredarse hacia abajo.
 
@@ -1358,7 +1842,7 @@ No confundir `vars.*` con las **variables de entorno automáticas** (`$GITHUB_SH
 
 ---
 
-## 11. Workflow Templates (Starter Workflows)
+## 12. Workflow Templates (Starter Workflows)
 
 Los **Workflow Templates** (también llamados Starter Workflows) son plantillas de workflows que una organización puede publicar para que aparezcan como sugerencias cuando alguien crea un nuevo workflow en cualquier repositorio de esa organización. Permiten estandarizar la forma en que los equipos comienzan a usar GitHub Actions.
 
@@ -1481,7 +1965,7 @@ Las sugerencias basadas en `filePatterns` aparecen destacadas: si el repositorio
 
 ---
 
-## 12. Custom Deployment Protection Rules
+## 13. Custom Deployment Protection Rules
 
 Las **Custom Deployment Protection Rules** permiten integrar sistemas externos en el proceso de aprobación de deployments a un environment. En lugar de (o además de) los revisores manuales de GitHub, una GitHub App puede aprobar o rechazar automáticamente un deployment basándose en lógica externa.
 
@@ -1550,7 +2034,7 @@ Las custom rules aparecen en la lista solo si la GitHub App está instalada y co
 
 ---
 
-## 13. Opciones Adicionales de Environments
+## 14. Opciones Adicionales de Environments
 
 Además de las protection rules básicas (Required Reviewers, Wait Timer), los environments de GitHub tienen opciones adicionales relevantes para entornos empresariales.
 
@@ -1616,7 +2100,7 @@ Al eliminar environment "production":
 
 ---
 
-## 14. Preguntas de Examen
+## 15. Preguntas de Examen
 
 **P: ¿Cómo restringe un admin de organización qué actions pueden usar los repos?**
 → En `Organization Settings → Actions → General → Actions permissions`. Puede permitir todas, solo las de GitHub, o una lista explícita de patrones (`actions/checkout@*, mi-org/*`).

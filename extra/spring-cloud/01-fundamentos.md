@@ -245,4 +245,95 @@ dependencyManagement {
 
 ---
 
+## 1.8 Las 8 falacias de la computación distribuida
+
+Peter Deutsch (Sun Microsystems, 1994) formuló 8 suposiciones falsas que los desarrolladores suelen hacer al pasar de sistemas locales a distribuidos. Spring Cloud existe precisamente para mitigar los efectos de estas falacias.
+
+| # | Falacia | Realidad | Cómo Spring Cloud ayuda |
+|---|---------|----------|------------------------|
+| 1 | La red es confiable | Los paquetes se pierden, las conexiones se cortan | Circuit Breaker, Retry (Resilience4j) |
+| 2 | La latencia es cero | Las llamadas de red miden milisegundos, no nanosegundos | Timeouts en Feign/Gateway, Load Balancer |
+| 3 | El ancho de banda es infinito | Los payloads grandes congestionan la red | Feign con compresión, mensajería asíncrona |
+| 4 | La red es segura | Hay interceptación, man-in-the-middle, inyección | OAuth2/JWT en Gateway, SSL, Spring Cloud Security |
+| 5 | La topología no cambia | Los servicios escalan, se mueven, se reinician | Service Discovery (Eureka) con registro dinámico |
+| 6 | Hay un único administrador | Equipos distintos gestionan partes distintas | Config Server centralizado, convenciones uniformes |
+| 7 | El coste de transporte es cero | Serialización/deserialización tiene coste CPU | Protobuf, mensajería asíncrona (Stream) |
+| 8 | La red es homogénea | Hay distintos OS, versiones JVM, protocolos | Abstracciones de Spring Cloud sobre las diferencias |
+
+**`[EXAMEN]`** En pruebas técnicas suelen preguntar cuántas falacias hay (8) y pedir ejemplos. La más frecuente en entrevistas: *"¿Por qué no puedes asumir que las llamadas entre microservicios son tan confiables como las llamadas locales?"* — respuesta: falacias 1 y 2.
+
+---
+
+## 1.9 CAP Theorem
+
+El teorema CAP (Brewer, 2000) establece que un sistema distribuido **no puede garantizar simultáneamente** las tres propiedades siguientes. En un escenario de partición de red, solo puede ofrecer dos:
+
+```
+        Consistencia (C)
+             /\
+            /  \
+           / CP \
+          /------\
+         /   AP   \
+        /__________\
+Disponibilidad (A)  Tolerancia a Particiones (P)
+```
+
+| Propiedad | Significado |
+|-----------|-------------|
+| **C** — Consistency | Todos los nodos ven los mismos datos al mismo tiempo |
+| **A** — Availability | Cada petición recibe una respuesta (no necesariamente con el dato más reciente) |
+| **P** — Partition tolerance | El sistema sigue funcionando aunque fallen enlaces de red entre nodos |
+
+**En la práctica**, la partición de red (P) es inevitable en sistemas distribuidos → la elección real es entre **CP** y **AP**:
+
+| Sistema | Tipo | Razonamiento |
+|---------|------|--------------|
+| Eureka | **AP** | Prefiere disponibilidad: sigue sirviendo entradas aunque algunos nodos no estén sincronizados |
+| Consul | **CP** por defecto | Requiere quorum para responder; puede rechazar peticiones durante particiones |
+| Zookeeper | **CP** | Consensus protocol (ZAB); rechaza writes sin quorum |
+| Redis (Sentinel) | **CP** | Elección de master bloqueante durante failover |
+| Cassandra | **AP** configurable | Nivel de consistencia ajustable por operación |
+
+**`[EXAMEN]`** Pregunta clásica: *"Eureka vs Consul: ¿cuál es CP y cuál es AP?"* — Eureka es AP, Consul es CP. También: *"¿Por qué Eureka tiene self-preservation mode?"* — para mantener disponibilidad (AP) durante particiones de red.
+
+**`[ADVERTENCIA]`** CAP Theorem asume partición total. En la práctica existe el espectro **PACELC**: incluso sin partición, hay trade-off entre latencia y consistencia.
+
+---
+
+## 1.10 Spring Cloud vs soluciones nativas de Kubernetes
+
+A partir de Kubernetes 1.x, muchas de las funcionalidades que justificaron Spring Cloud están disponibles nativamente en la plataforma. Es fundamental entender cuándo usar cada enfoque.
+
+### Tabla comparativa
+
+| Capacidad | Spring Cloud | Kubernetes nativo |
+|-----------|-------------|-------------------|
+| **Service Discovery** | Eureka Server (proceso separado) | kube-dns + Services + Endpoints |
+| **Load Balancing** | Spring Cloud LoadBalancer (en el cliente) | kube-proxy + Service (en la red) |
+| **Config Management** | Config Server + Git | ConfigMaps + Secrets + etcd |
+| **Circuit Breaker** | Resilience4j (en el código) | Istio/Linkerd (en el sidecar) |
+| **API Gateway** | Spring Cloud Gateway (app JVM) | Ingress Controller + API Gateway |
+| **Observabilidad** | Micrometer Tracing + Zipkin | Jaeger/Zipkin vía service mesh |
+
+### ¿Cuándo usar Spring Cloud en Kubernetes?
+
+**Usar Spring Cloud incluso en Kubernetes cuando:**
+- El equipo tiene más expertise en Java/Spring que en Kubernetes
+- Se necesita lógica de negocio en el Gateway (filtros personalizados complejos)
+- Se usa Spring Cloud Stream para mensajería (no tiene equivalente nativo)
+- Se necesita `@RefreshScope` para reconfiguración sin reinicio de pods
+- El proyecto tiene requisitos de multi-cloud o no quiere acoplarse a K8s
+
+**Delegar a Kubernetes cuando:**
+- Se usa service mesh (Istio/Linkerd) → circuit breaking, retry, mTLS en el sidecar
+- Se quiere eliminar Eureka → usar `spring-cloud-starter-kubernetes-discoveryclient`
+- Se quiere eliminar Config Server → usar `spring-cloud-kubernetes-config` (lee ConfigMaps)
+
+**`[EXAMEN]`** Pregunta frecuente: *"¿Necesitas Eureka si despliegas en Kubernetes?"* — No necesariamente. Kubernetes Service Discovery es suficiente para muchos casos. Spring Cloud Kubernetes permite usar ConfigMaps y Secrets como fuente de configuración y el DiscoveryClient nativo de K8s, eliminando la necesidad de Eureka y Config Server.
+
+**`[ADVERTENCIA]`** No mezcles Eureka y Kubernetes Service Discovery sin una estrategia clara. Tener dos sistemas de descubrimiento paralelos genera inconsistencias difíciles de depurar.
+
+---
+
 ← [Volver al índice](./README.md) | Siguiente: [Parte 2 — Arquitectura](./02-arquitectura.md) →

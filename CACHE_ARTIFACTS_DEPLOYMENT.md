@@ -489,6 +489,84 @@ secrets.PROD_DB_PASSWORD  # en: Settings → Environments → production → Sec
 Cada uso de un environment registra un deployment visible en `Repositorio → Environments`.
 Muestra: quién desplegó, desde qué rama/SHA, resultado y URL.
 
+### Preview Environments: entornos efímeros por PR
+
+Un **Preview Environment** es un entorno de despliegue temporal y único creado automáticamente cuando se abre un PR, con su propia URL (`pr-123.dev.empresa.com`). Se destruye automáticamente cuando el PR se cierra.
+
+```
+PR #123 abierto
+  ↓
+deploy automático → https://pr-123.dev.empresa.com
+  ↓
+QA prueba el PR en un entorno real sin afectar a develop ni staging
+  ↓
+PR cerrado → entorno eliminado
+```
+
+```yaml
+# .github/workflows/ci-pr.yml (fragmento del job de preview)
+
+  deploy-preview:
+    needs: build-pr-image
+    runs-on: ubuntu-latest
+    # Environment dinámico: un environment distinto por cada PR
+    environment:
+      name: pr-${{ github.event.pull_request.number }}
+      url: https://pr-${{ github.event.pull_request.number }}.dev.empresa.com
+
+    steps:
+      - name: Desplegar imagen efímera al entorno de preview
+        run: |
+          # Ejemplo con kubectl (namespace dinámico por PR)
+          kubectl create namespace pr-${{ github.event.pull_request.number }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl set image deployment/app app=${{ needs.build-pr-image.outputs.image-tag }} \
+            -n pr-${{ github.event.pull_request.number }}
+
+          # O con docker-compose en un servidor de preview:
+          # ssh deploy@preview-server \
+          #   "docker pull ${{ needs.build-pr-image.outputs.image-tag }} && \
+          #    docker stop pr-${{ github.event.pull_request.number }} || true && \
+          #    docker run -d --name pr-${{ github.event.pull_request.number }} \
+          #      -p ${{ github.event.pull_request.number }}:3000 \
+          #      ${{ needs.build-pr-image.outputs.image-tag }}"
+
+      - name: Comentar URL de preview en el PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = `https://pr-${{ github.event.pull_request.number }}.dev.empresa.com`
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Preview Environment listo\n🔗 ${url}\n\nImagen: \`${{ needs.build-pr-image.outputs.image-tag }}\``
+            })
+
+  # Limpieza del entorno al cerrar el PR
+  teardown-preview:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Eliminar namespace de preview
+        run: |
+          kubectl delete namespace pr-${{ github.event.pull_request.number }} \
+            --ignore-not-found=true
+```
+
+**Diferencia entre Preview Environment y Staging:**
+
+| | Preview Environment | Staging |
+|---|---|---|
+| Cuántos | Uno por PR | Uno compartido |
+| Quién lo usa | El equipo del PR, QA | Todo el equipo |
+| Ciclo de vida | Abre con el PR, muere con él | Permanente |
+| Datos | Mock / seed data | Datos de test |
+| Secretos | Dev secrets (sin datos reales) | Staging secrets |
+
+> ⚠️ Los preview environments requieren infraestructura que soporte despliegues dinámicos (Kubernetes con namespaces, Vercel, Railway, Render, etc.). GitHub solo orquesta el **cuándo** — la plataforma de despliegue gestiona el **cómo** y el **dónde**.
+
 ### Ejemplo completo: CI/CD con environments
 
 ```yaml
@@ -827,6 +905,102 @@ services:
 | Disponibilidad | Solo mismo repo | Cualquier máquina con acceso al registry |
 | Comparte límite con | `actions/cache` de dependencias | Solo el espacio del registry |
 | Ideal para | Repos normales | Self-hosted runners, múltiples repos |
+
+### Imagen efímera por PR (tag `pr-<ID>-<SHA>`)
+
+En Pull Requests **no se quiere publicar una imagen de producción** — se quiere una imagen temporal para que QA pueda probarla y que expire automáticamente. La convención es etiquetarla con el número de PR y el SHA para que sea trazable y no colisione entre PRs.
+
+```yaml
+# .github/workflows/ci-pr.yml
+name: CI — Pull Request
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-pr-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write   # Para comentar el resultado en el PR
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login a GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generar tag efímero pr-<ID>-<SHA>
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            # pr-123-abc1234
+            type=raw,value=pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+            # Alias sin SHA para referenciar "el último de este PR"
+            type=raw,value=pr-${{ github.event.pull_request.number }}-latest
+
+      - name: Build y Push imagen efímera
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Comentar imagen en el PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = 'pr-${{ github.event.pull_request.number }}-${{ github.sha }}'
+            const image = `ghcr.io/${{ github.repository }}:${tag}`
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Imagen de PR lista\n\`\`\`\ndocker pull ${image}\n\`\`\`\nTag: \`${tag}\``
+            })
+```
+
+**Políticas de expiración de imágenes PR:**
+
+Las imágenes efímeras deben eliminarse automáticamente cuando el PR se cierra, para no acumular imagen tras imagen:
+
+```yaml
+# .github/workflows/cleanup-pr-image.yml
+name: Cleanup PR Image
+
+on:
+  pull_request:
+    types: [closed]   # ← Se dispara cuando el PR se cierra o mergea
+
+jobs:
+  delete-pr-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Eliminar imagen del PR
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: container
+          # Elimina todas las versiones que coincidan con el patrón del PR
+          ignore-versions: '^(?!pr-${{ github.event.pull_request.number }}-).*'
+          delete-only-untagged-versions: false
+```
+
+> ⚠️ Las imágenes PR **nunca deben subirse al namespace de producción** (`latest`, `main`, `v*`). El tag `pr-<ID>-<SHA>` hace que sean fácilmente identificables y eliminables por política.
 
 ### Eliminar imágenes antiguas automáticamente
 

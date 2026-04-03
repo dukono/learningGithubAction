@@ -11,11 +11,12 @@
 7. [Buenas Prácticas de Seguridad](#7-buenas-prácticas-de-seguridad)
 8. [Check Runs y Check Suites](#8-check-runs-y-check-suites)
 9. [Code Scanning con CodeQL](#9-code-scanning-con-codeql)
-10. [actions/github-script](#10-actionsgithub-script)
-11. [Artifact Attestations y Build Provenance](#11-artifact-attestations-y-build-provenance)
-12. [::add-mask:: para Enmascarar Valores Dinámicos](#12-add-mask-para-enmascarar-valores-dinámicos)
-13. [OpenSSF Scorecards](#13-openssf-scorecards)
-14. [Preguntas de Examen](#14-preguntas-de-examen)
+10. [Escaneo de Vulnerabilidades en Imagen Docker (SCA/DAST)](#10-escaneo-de-vulnerabilidades-en-imagen-docker-scadast)
+11. [actions/github-script](#11-actionsgithub-script)
+12. [Artifact Attestations y Build Provenance](#12-artifact-attestations-y-build-provenance)
+13. [::add-mask:: para Enmascarar Valores Dinámicos](#13-add-mask-para-enmascarar-valores-dinámicos)
+14. [OpenSSF Scorecards](#14-openssf-scorecards)
+15. [Preguntas de Examen](#15-preguntas-de-examen)
 
 ---
 
@@ -775,7 +776,167 @@ permissions:
 
 ---
 
-## 10. actions/github-script
+## 10. Escaneo de Vulnerabilidades en Imagen Docker (SCA/DAST)
+
+CodeQL analiza el **código fuente** (SAST). Pero después de construir la imagen Docker existen dos análisis adicionales:
+
+- **SCA (Software Composition Analysis):** escanea la imagen construida en busca de CVEs en las dependencias del OS, librerías, y paquetes de lenguaje.
+- **DAST (Dynamic Application Security Testing):** ataca la aplicación en ejecución buscando vulnerabilidades de runtime (OWASP Top 10: SQLi, XSS, etc.).
+
+```
+Código fuente → CodeQL (SAST) → imagen Docker → Trivy (SCA) → app en ejecución → OWASP ZAP (DAST)
+```
+
+### Escaneo de imagen con Trivy
+
+**Trivy** es el escáner de vulnerabilidades más usado en GitHub Actions. Detecta CVEs en el OS base (Alpine, Debian, Ubuntu), dependencias de lenguaje (npm, pip, Maven, Go modules) y configuraciones incorrectas.
+
+```yaml
+  scan-image:
+    needs: build-push        # Necesita que la imagen ya esté construida
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # Para publicar en Security → Code scanning alerts
+
+    steps:
+      - name: Escanear imagen con Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:${{ needs.build-push.outputs.image-tag }}
+          format: sarif            # Publica como alertas en GitHub Security
+          output: trivy-results.sarif
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'           # ← Falla el pipeline si hay CVEs CRITICAL o HIGH
+
+      - name: Publicar resultados en Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()   # Publicar aunque el job haya fallado
+        with:
+          sarif_file: trivy-results.sarif
+          category: container-scanning
+```
+
+**Formatos de salida de Trivy:**
+
+```yaml
+# Tabla legible en logs (para PR checks rápidos)
+format: table
+exit-code: '1'
+severity: 'CRITICAL'
+
+# SARIF (para publicar en GitHub Security → Code scanning alerts)
+format: sarif
+output: trivy-results.sarif
+
+# JSON (para procesar programáticamente)
+format: json
+output: trivy-results.json
+```
+
+### Ignorar CVEs conocidos (trivy.yaml)
+
+Si una CVE no tiene fix disponible o está aceptada por el equipo de seguridad, se puede ignorar con un archivo de configuración:
+
+```yaml
+# .trivy.yaml (en la raíz del repo)
+vulnerability:
+  ignore-unfixed: true    # No reportar CVEs sin parche disponible
+
+# O lista explícita de CVEs ignoradas:
+# .trivyignore
+CVE-2023-XXXXX   # Descripción de por qué se ignora
+CVE-2024-YYYYY   # Fix no disponible, aceptado hasta 2025-01-01
+```
+
+```yaml
+      - name: Escanear con ignores
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:${{ needs.build-push.outputs.image-tag }}
+          trivyignores: .trivyignore
+          format: table
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+```
+
+### Escaneo de código fuente con Trivy (IaC y secrets)
+
+Trivy también puede escanear el repositorio directamente (sin imagen) para detectar secretos hardcodeados y misconfiguraciones en IaC (Terraform, Kubernetes YAML):
+
+```yaml
+  scan-code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Escanear repositorio (secrets + IaC misconfigs)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs              # ← filesystem scan, no imagen
+          scan-ref: .
+          format: table
+          exit-code: '1'
+          scanners: secret,misconfig # ← secrets hardcodeados + IaC misconfigs
+```
+
+### DAST con OWASP ZAP
+
+**OWASP ZAP** ataca la aplicación **en ejecución** (no el código). Requiere que el servicio esté desplegado y accesible (staging o preview environment).
+
+```yaml
+  dast-scan:
+    needs: deploy-staging    # La aplicación debe estar desplegada
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'https://staging.example.com'
+          # baseline: escaneo rápido (activo de sólo-lectura, sin ataques activos)
+          # full-scan: escaneo completo con ataques activos
+          rules_file_name: .zap/rules.tsv   # Opcional: suprimir falsos positivos
+          fail_action: warn                  # warn | fail
+          # fail = falla el job si encuentra alertas MEDIUM o superiores
+          # warn = siempre pasa pero genera warning en el log
+```
+
+**Tipos de escaneo ZAP:**
+
+| Action | Qué hace | Tiempo | Indicado para |
+|---|---|---|---|
+| `action-baseline` | Solo peticiones pasivas (no envía ataques) | ~2 min | PRs, CI rápido |
+| `action-full-scan` | Activo + pasivo (lanza ataques reales) | ~15 min | Staging/UAT |
+| `action-api-scan` | Diseñado para APIs (OpenAPI/Swagger) | ~5 min | APIs REST |
+
+### Integración en el pipeline completo
+
+```
+PR abierto:
+  build (sin push) → Trivy (tabla, no bloquea) → CodeQL
+
+Merge a develop:
+  build + push → Trivy SARIF (bloquea si CRITICAL) → deploy staging → ZAP Baseline
+
+Release candidate:
+  build optimizado → Trivy SARIF (bloquea si HIGH) → SBOM attest → ZAP Full Scan → UAT gate
+```
+
+```yaml
+  # Resumen del orden recomendado en un pipeline completo:
+  jobs:
+    build:           # Construye imagen
+    scan-sast:       # CodeQL sobre código fuente (en paralelo con build)
+    scan-image:      # Trivy sobre imagen construida (necesita: build)
+    deploy-staging:  # Deploy (necesita: scan-image)
+    dast:            # OWASP ZAP (necesita: deploy-staging)
+    smoke-tests:     # Smoke tests funcionales (en paralelo con dast)
+```
+
+---
+
+## 11. actions/github-script
 
 `actions/github-script` permite escribir JavaScript directamente en el YAML del workflow para interactuar con la API de GitHub (Octokit) sin necesidad de crear una action separada.
 
@@ -907,7 +1068,7 @@ permissions:
 
 ---
 
-## 11. Artifact Attestations y Build Provenance
+## 12. Artifact Attestations y Build Provenance
 
 Las **Artifact Attestations** son firmas digitales criptográficas que verifican **dónde y cómo se construyó** un artefacto de software. Son una pieza fundamental de la seguridad en la cadena de suministro de software (supply chain security): permiten a cualquier usuario verificar que un binario fue producido por un workflow específico en un repositorio concreto, y no fue alterado después.
 
@@ -1073,7 +1234,7 @@ jobs:
 
 ---
 
-## 12. `::add-mask::` para Enmascarar Valores Dinámicos
+## 13. `::add-mask::` para Enmascarar Valores Dinámicos
 
 Los **secrets** configurados en Settings se enmascaran automáticamente en los logs — GitHub los reemplaza por `***`. Sin embargo, los valores **calculados en runtime** durante la ejecución del workflow NO están enmascarados por defecto, aunque contengan información sensible.
 
@@ -1154,7 +1315,7 @@ echo "::add-mask::$TOKEN"
 
 ---
 
-## 13. OpenSSF Scorecards
+## 14. OpenSSF Scorecards
 
 **OpenSSF Scorecards** es una herramienta open source mantenida por la Open Source Security Foundation que **evalúa automáticamente las prácticas de seguridad** de un repositorio en la cadena de suministro de software. Produce una puntuación de 0 a 10 basada en decenas de checks automatizados.
 
@@ -1249,7 +1410,7 @@ Scorecards es relevante en el contexto del examen porque:
 
 ---
 
-## 14. Preguntas de Examen
+## 15. Preguntas de Examen
 
 **P: ¿Qué es un Check Run y cómo se relaciona con GitHub Actions?**
 → Un Check Run es el resultado de un job individual en la API de GitHub. GitHub Actions crea automáticamente uno por cada job. Son la base de los status checks requeridos en branch protection rules.
