@@ -1,0 +1,51 @@
+name: CI/CD Maven - App
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Ejecutar en modo prueba (no escalar realmente)'
+        required: false
+        default: 'false'
+
+
+jobs:
+  scale-down:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Northflank CLI (if needed for fallback) & Requests
+        run: |
+          pip install requests
+
+      - name: Check Usage and Scale to Zero
+        env:
+          NORTHFLANK_API_KEY: ${{ secrets.NORTHFLANK_API_KEY }}
+          NF_PROJECT_ID: ${{ vars.NF_PROJECT_ID }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        shell: python
+        run: |
+          import os
+          import sys
+          import requests
+          import json
+          import time
+
+          HEADERS = {
+            "Authorization": f"Bearer ${{NORTHFLANK_API_KEY}}",
+            "Content-Type": "application/json"
+          }
+
+          resp = requests.get(
+            f"https://api.northflank.com/v1/projects/Japp/services/deployment-service",
+            headers=HEADERS
+          )
+          resp.raise_for_status()
+          data = resp.json().get("data").get("ports")[0].get("dns")
+          print(f"⚠️ para {data}")
