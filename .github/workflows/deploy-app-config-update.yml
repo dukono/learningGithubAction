@@ -38,7 +38,7 @@ jobs:
           import time
 
           HEADERS = {
-            "Authorization": f"Bearer ${{NORTHFLANK_API_KEY}}",
+            "Authorization": f"Bearer ${{ secrets.NORTHFLANK_API_KEY }}",
             "Content-Type": "application/json"
           }
 
