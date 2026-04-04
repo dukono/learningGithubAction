@@ -12,17 +12,10 @@ jobs:
   scale-down:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-
-      - name: Install Northflank CLI (if needed for fallback) & Requests
-        run: |
-          pip install requests
 
       - name: Check Usage and Scale to Zero
         env:
@@ -47,5 +40,12 @@ jobs:
             headers=HEADERS
           )
           resp.raise_for_status()
-          data = resp.json().get("data").get("ports")[0].get("dns")
-          print(f"⚠️ para {data}")
+          url = resp.json().get("data").get("ports")[0].get("dns")
+          print(f"⚠️ URL: {url}")
+          refresh_url = f"https://{url}/actuator/refresh"
+          refresh_resp = requests.post(refresh_url)
+          print(f"Respuesta /actuator/refresh: {refresh_resp.status_code} - {refresh_resp.text}")
+
+
+
+
