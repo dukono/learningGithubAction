@@ -12,12 +12,19 @@ jobs:
   scale-down:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Check Usage and Scale to Zero
+      - name: Install Northflank CLI (if needed for fallback) & Requests
+        run: |
+          pip install requests
+
+      - name: URL
         env:
           NORTHFLANK_API_KEY: ${{ secrets.NORTHFLANK_API_KEY }}
           NF_PROJECT_ID: ${{ vars.NF_PROJECT_ID }}
