@@ -18,7 +18,8 @@ jobs:
           echo "=== WORKFLOW_RUN EVENT (atributos raíz) ==="
           echo "github.event.action (completed/requested/in_progress)": "${{ github.event.action }}"
 
-      - name: workflow-run-main
+      - name: workflowasca-run-main
+        shell:
         run: |
           echo "=== github.event.workflow_run (workflow que lo disparó) ==="
           echo "workflow_run.id":               "${{ github.event.workflow_run.id }}"

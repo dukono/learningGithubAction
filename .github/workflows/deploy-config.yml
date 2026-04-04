@@ -75,6 +75,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Deply echo
+        run: |
+          echo "Deploying image-path: ${{ needs.build.outputs.DEPLOY_TAG }}"
       - name: Deploy en Northflank
         uses: northflank/deploy-to-northflank@v1
         with:
