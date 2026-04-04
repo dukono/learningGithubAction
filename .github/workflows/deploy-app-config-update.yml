@@ -6,6 +6,11 @@ on:
         description: 'Ejecutar en modo prueba (no escalar realmente)'
         required: false
         default: 'false'
+  push:
+    branches:
+      - main
+    paths:
+      - app/config/**
 jobs:
   scale-down:
     runs-on: ubuntu-latest
