@@ -10,7 +10,7 @@ on:
     branches:
       - main
     paths:
-      - app/config/**
+      - app/config
 jobs:
   scale-down:
     runs-on: ubuntu-latest
