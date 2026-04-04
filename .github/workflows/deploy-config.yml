@@ -86,4 +86,3 @@ jobs:
           service-id: ${{ secrets.NORTHFLANK_SERVICE_CONFIG_ID }}
           image-path: ${{ needs.build.outputs.DEPLOY_TAG }}
           credentials-id: ${{ secrets.NORTHFLANK_CREDENTIALS_ID }}
-
