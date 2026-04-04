@@ -1,4 +1,4 @@
-name: CI/CD Maven - Config
+name: Deploy Config
 on:
   push:
     branches: [main]

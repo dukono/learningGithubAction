@@ -1,6 +1,6 @@
-name: Read branch info
-on: 
-  pull_request: 
+name: Info - PR App Read branch
+on:
+  pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
 
 #
@@ -37,7 +37,7 @@ jobs:
         run: |
           echo "=== PATH: ${{ github.workspace }} ==="
           ls -lta ${{ github.workspace }}
-          tree -d -L 3 ${{ github.workspace }} 
+          tree -d -L 3 ${{ github.workspace }}
           echo "=== PATH: $(~) ==="
           ls -lta ~
           tree -d -L 3 ~
@@ -75,7 +75,7 @@ jobs:
             echo "Archivo no encontrado: $expanded_pattern"
           fi
           done
-          
+
       - name: setup-java-21
         uses: actions/setup-java@v5
         with:
@@ -93,7 +93,7 @@ jobs:
           run: |
           echo "=== PATH: ${{ github.workspace }} ==="
           ls -lta ${{ github.workspace }}
-          tree -d -L 3 ${{ github.workspace }} 
+          tree -d -L 3 ${{ github.workspace }}
           echo "=== PATH: $(~) ==="
           ls -lta ~
           tree -d -L 3 ~
@@ -107,9 +107,8 @@ jobs:
           run: |
           echo "=== PATH: ${{ github.workspace }} ==="
           ls -lta ${{ github.workspace }}
-          tree -d -L 3 ${{ github.workspace }} 
+          tree -d -L 3 ${{ github.workspace }}
           echo "=== PATH: $(~) ==="
           ls -lta ~
           tree -d -L 3 ~
 
-          

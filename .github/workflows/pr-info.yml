@@ -1,13 +1,13 @@
-name: Read branch info
-on: 
-  pull_request: 
+name: Info - RP Read branch info
+on:
+  pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
 
 # Un grupo por PR → cancelar CI anterior del mismo PR
 concurrency:
   group: ci-${{ github.workflow_ref }}
   cancel-in-progress: true
-  
+
 jobs:
   show-branch-info:
     runs-on: ubuntu-latest
@@ -19,7 +19,7 @@ jobs:
         run: |
           echo "github.ref": "${{github.ref}}"
           echo "github.sha": "${{github.sha}}"
-          echo "github.event.after": "${{github.event.after}}" 
+          echo "github.event.after": "${{github.event.after}}"
           echo "github.event.before": "${{github.event.before}}"
           echo "github.event.compare": "${{github.event.compare}}"
           echo "github.event.created": "${{github.event.created}}"
@@ -291,7 +291,7 @@ jobs:
           result=$(ls -lta ${{github.workspace}})
           echo "-------------------"
           echo "ls -lta 'github.workspace' (${{github.workspace}})" = "$result"
-          
+
           echo "'current'": $current
           echo "'after'": $after
           echo "'before'": $before
@@ -305,11 +305,10 @@ jobs:
           echo "$a"
           b=$(git l ${before} -10)
           echo "-------------------"
-          echo ">>before<<: $before" 
+          echo ">>before<<: $before"
           echo "$b"
           ab=$(git l ${before}..${after} -10)
           echo "-------------------"
-          echo ">>after - before<<:" 
+          echo ">>after - before<<:"
           echo "$ab"
-          
-          
+

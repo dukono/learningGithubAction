@@ -1,4 +1,4 @@
-name: CI/CD Maven - App
+name: Deploy App Configuration
 on:
   workflow_dispatch:
     inputs:
@@ -48,7 +48,4 @@ jobs:
           refresh_url = f"https://{url}/actuator/refresh"
           refresh_resp = requests.post(refresh_url)
           print(f"Respuesta /actuator/refresh: {refresh_resp.status_code} - {refresh_resp.text}")
-
-
-
 
