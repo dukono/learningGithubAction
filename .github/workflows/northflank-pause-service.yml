@@ -1,4 +1,4 @@
-name: Scale Inactive Services to Zero
+name: Northflank Inactive Services Pause
 
 on:
   schedule:
@@ -118,8 +118,12 @@ jobs:
             for svc in services:
               svc_id = svc.get("id")
               svc_name = svc.get("name")
+              svc_status = svc.get("status")
               if svc_id == skip_id:
                 print(f"⏭️ Saltando '{svc_name}' (ya pausado).")
+                continue
+              if not svc_status:
+                print(f"⏸️ Saltando '{svc_name}' (ya pausado)")
                 continue
               checked_count += 1
               if pause_service(svc_id, svc_name):
@@ -150,7 +154,7 @@ jobs:
             print(f"ℹ️ Estado de '{APP_SERVICE_ID}': {app_status}")
 
             # 3. Si status == {} → servicio pausado → pausar todos los demás sin mirar métricas
-            if not app_status:  # FIX: indentación correcta al nivel de main()
+            if not app_status:
               print(f"⏸️ '{APP_SERVICE_ID}' ya está pausado. Pausando el resto de servicios...")
               _pause_all_except(services, skip_id=APP_SERVICE_ID)
               return
