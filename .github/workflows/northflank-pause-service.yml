@@ -2,7 +2,7 @@ name: Northflank Inactive Services Pause
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # Ejecutar cada 30 minutos
+    - cron: '0,30 * * * *' # Ejecutar cada 30 minutos
   workflow_dispatch:
     inputs:
       dry_run:
@@ -44,7 +44,6 @@ jobs:
           APP_SERVICE_ID = os.getenv("NORTHFLANK_SERVICE_ID")
           DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
 
-          # FIX: BASE_URL y HEADERS deben estar fuera del bloque if, al nivel raíz
           if not API_KEY or not PROJECT_ID:
             print("❌ Error: Faltan NORTHFLANK_API_KEY o NORTHFLANK_PROJECT_ID")
             sys.exit(1)
@@ -54,7 +53,6 @@ jobs:
             "Authorization": f"Bearer {API_KEY}",
             "Content-Type": "application/json"
           }
-
 
           def get_services():
             url = f"{BASE_URL}/projects/{PROJECT_ID}/services"
@@ -70,7 +68,7 @@ jobs:
           def get_metrics(service_id):
             now = datetime.datetime.now(datetime.timezone.utc)
             now_iso = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-            duration_seconds = 60 * 30  # FIX: nombre descriptivo, no now_minus_30_iso (es una duración, no un ISO)
+            duration_seconds = 60 * 30
 
             url = (
               f"{BASE_URL}/projects/{PROJECT_ID}/services/{service_id}/metrics"
