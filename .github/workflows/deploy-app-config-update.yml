@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Ejecutar en modo prueba (no escalar realmente)'
+        description: 'No hace nada'
         required: false
         default: 'false'
   push:
@@ -12,7 +12,7 @@ on:
     paths:
       - app/config/**
 jobs:
-  scale-down:
+  change-config-properties:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
