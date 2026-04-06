@@ -2,7 +2,13 @@ name: Northflank Inactive Services Pause
 
 on:
   schedule:
-    - cron: '0,30 * * * *' # Ejecutar cada 30 minutos
+    # 1. De 8:00 a 22:00 cada 30 minutos (Formato: min hora días mes día-semana)
+    # Se ejecuta en el minuto 0 y 30 de cada hora entre las 8 y las 22.
+    - cron: '0,30 8-22 * * *'
+    
+    # 2. De 22:00 a 8:00 cada 1 hora
+    # Se ejecuta en el minuto 0 de las horas 23, 0, 1, 2, 3, 4, 5, 6, 7
+    - cron: '0 23-23/1,0-7/1 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
