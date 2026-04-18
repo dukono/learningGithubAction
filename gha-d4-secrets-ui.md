@@ -10,6 +10,25 @@ Los secrets en GitHub Actions permiten almacenar credenciales, tokens y cualquie
 
 GitHub Actions organiza los secrets en una jerarquía de cuatro niveles. Cada nivel tiene un alcance diferente y determina qué workflows y jobs pueden acceder al secret.
 
+```mermaid
+flowchart TD
+    E([Enterprise\nSolo admins\nToda la empresa]) --> O([Organization\nRepos autorizados\nde la org])
+    O --> R([Repository\nSolo el repo\ndonde se define])
+    R --> ENV([Environment\nSolo jobs con\nenvironment: nombre])
+
+    E:::warning
+    O:::primary
+    R:::neutral
+    ENV:::secondary
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+```
+
+*Jerarquía de precedencia: el nivel más específico (environment) sobreescribe los niveles superiores cuando existe el mismo nombre de secret.*
+
 | Nivel | Alcance | Configuración |
 |-------|---------|---------------|
 | Repositorio | Solo el repo donde se define | Settings > Secrets and variables > Actions |

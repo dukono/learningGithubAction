@@ -8,6 +8,38 @@ La REST API de GitHub permite automatizar la gestión de GitHub Actions a nivel 
 
 > [CONCEPTO] La API distingue entre operaciones **repo-level** (`/repos/{owner}/{repo}/actions/...`) y **org-level** (`/orgs/{org}/actions/...`). Las operaciones de runner groups y self-hosted runners a nivel de organización requieren scopes adicionales.
 
+```mermaid
+mindmap
+  root((REST API\nGitHub Actions))
+    Workflows repo-level
+      GET /workflows
+      GET /runs con filtros
+      PUT /disable
+      PUT /enable
+      POST /cancel
+      POST /rerun-failed-jobs
+    Runners org-level
+      GET /runners
+      GET /runner-groups
+      POST runner-groups
+      PUT mover runner a grupo
+      DELETE runner
+    Secrets
+      GET public-key
+      PUT crear/actualizar
+      DELETE eliminar
+      GET metadatos
+    Variables
+      POST crear
+      PATCH actualizar
+      DELETE eliminar
+      GET valor en texto plano
+    Paginación
+      per_page máx 100
+      cabecera Link
+      gh api --paginate
+```
+
 ## Autenticación y permisos
 
 Para usar la REST API de GitHub Actions en contexto enterprise existen dos mecanismos principales. El primero es un PAT (Personal Access Token) con los scopes adecuados; el segundo es una GitHub App con los permisos correspondientes. Elegir el mecanismo correcto es crítico: los PAT tienen mayor riesgo de exposición si se filtran, mientras que las GitHub Apps permiten permisos más granulares y rotación automática de credenciales.

@@ -41,6 +41,25 @@ La diferencia entre ambas variables es importante para el examen de certificaci�
 | Activa `::debug::` en steps | No | Sí |
 | Recomendado cuando | El job ni siquiera arranca correctamente | Un step falla con comportamiento inesperado |
 
+```mermaid
+flowchart TD
+    PROB{{"¿Dónde está el problema?"}}
+    PROB -->|"Job no arranca,\nerror de red o infraestructura"| RD["ACTIONS_RUNNER_DEBUG=true\n→ artefacto ZIP descargable"]
+    PROB -->|"Step falla con\ncomportamiento inesperado"| SD["ACTIONS_STEP_DEBUG=true\n→ logs ::debug:: en UI"]
+    PROB -->|"Ambos síntomas"| BOTH["Activar ambas variables\n(logs voluminosos)"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class PROB root
+    class RD primary
+    class SD secondary
+    class BOTH warning
+```
+*Criterio de selección entre los dos modos de debug: runner debug para infraestructura, step debug para lógica de steps.*
+
 ## Cómo configurar las variables de depuración
 
 Ambas variables se configuran como secrets en el repositorio, no como variables de entorno en el YAML del workflow. La razón es técnica: los secrets se inyectan en el entorno del runner antes de que comience la ejecución, mientras que las variables definidas en `env:` del workflow solo están disponibles durante la ejecución de steps.

@@ -21,23 +21,23 @@ Ambas referencias apuntan al mismo token. La primera forma es más explícita y 
 
 El ciclo de vida del `GITHUB_TOKEN` sigue este flujo:
 
+```mermaid
+stateDiagram-v2
+    [*] --> emitted : evento dispara workflow\n(push, PR, schedule...)
+    emitted --> active : GitHub emite token\nscoped al repo
+
+    state active {
+        [*] --> job_running
+        job_running --> job_running : jobs y steps\nen ejecución
+    }
+
+    active --> revoked : workflow completa con éxito
+    active --> revoked : workflow falla
+    active --> revoked : workflow cancelado
+    revoked --> [*] : token expirado\ne invalidado
 ```
-Evento dispara workflow
-        │
-        ▼
-GitHub emite GITHUB_TOKEN  ◄── scoped al repo, permisos configurados
-        │
-        ▼
-Jobs y steps se ejecutan
-(el token está activo durante todo el run)
-        │
-        ├── Workflow completa con éxito
-        ├── Workflow falla
-        ├── Workflow se cancela
-        │
-        ▼
-GitHub revoca el GITHUB_TOKEN  ◄── el token expira e invalida
-```
+
+*El token se emite una vez por run completo y se revoca al terminar el run, independientemente de cuántos jobs tenga.*
 
 El token se crea una vez por run, no una vez por job. Todos los jobs de un mismo run comparten el mismo token, aunque cada job también puede recibir un token con permisos reducidos si se declara `permissions:` a nivel de job. La revocación ocurre al finalizar el run completo, no al finalizar cada job individual.
 
@@ -105,6 +105,31 @@ Consecuencias prácticas para workflows con PRs de forks:
 ## Cuándo se necesita un PAT en lugar de GITHUB_TOKEN
 
 Existen escenarios donde el `GITHUB_TOKEN` es insuficiente por diseño y se debe usar un PAT (o una GitHub App):
+
+```mermaid
+flowchart TD
+    A{{"¿Necesita acceder\na otro repositorio?"}} -->|Sí| PAT["Usar PAT\no GitHub App"]
+    A -->|No| B{{"¿Necesita que el evento\ncreado dispare\notros workflows?"}}
+    B -->|Sí| PAT
+    B -->|No| C{{"¿Necesita superar\nbranch protection\ncon bypass?"}}
+    C -->|Sí| APP["Usar GitHub App\ncomo bypass actor"]
+    C -->|No| D{{"¿Requiere\nGitHub Packages\ncross-repo?"}}
+    D -->|Sí| PAT
+    D -->|No| TOKEN["GITHUB_TOKEN\nes suficiente"]
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class A,B,C,D warning
+    class TOKEN secondary
+    class PAT,APP primary
+```
+
+*Árbol de decisión: usa GITHUB_TOKEN siempre que sea posible; recurre a PAT o GitHub App solo cuando el scope o las restricciones lo exigen.*
 
 **Crear PRs que disparen otros workflows.** Los eventos generados por el `GITHUB_TOKEN` no disparan nuevos workflow runs para evitar bucles infinitos. Si un workflow crea un PR y se necesita que ese PR dispare el workflow de CI, el `git push` o la creación del PR debe realizarse con un PAT.
 

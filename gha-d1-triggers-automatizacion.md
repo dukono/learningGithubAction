@@ -19,6 +19,32 @@ No todos los workflows se activan por cambios en el código. Hay escenarios dond
 | `workflow_call` | Otro workflow (`uses:`) | Lógica reutilizable (callee) | No |
 | `workflow_run` | Evento de otro workflow | Pipelines encadenados, post-CI | No |
 
+```mermaid
+graph TD
+    WD["workflow_dispatch\nactivación manual"]
+    SC["schedule\ncron periódico"]
+    WC_CALLER["workflow caller"]
+    WC_CALLEE["workflow_call\ncallee reutilizable"]
+    WR_TRIGGER["workflow A completa"]
+    WR_LISTENER["workflow_run\nworkflow B escucha"]
+
+    WD -->|"usuario o API"| RUN1["Ejecución"]
+    SC -->|"cron UTC"| RUN2["Ejecución"]
+    WC_CALLER -->|"uses: org/repo/.github/workflows/x.yml"| WC_CALLEE
+    WC_CALLEE --> RUN3["Ejecución como callee"]
+    WR_TRIGGER -->|"completed"| WR_LISTENER
+    WR_LISTENER --> RUN4["Ejecución independiente"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class WD,SC,WC_CALLER,WR_TRIGGER root
+    class WC_CALLEE,WR_LISTENER primary
+    class RUN1,RUN2,RUN3,RUN4 secondary
+```
+
 ---
 
 ## Conceptos
@@ -101,6 +127,30 @@ on:
 ```
 
 El campo `github.event.workflow_run.conclusion` permite al job verificar si el workflow padre tuvo éxito antes de proceder.
+
+```mermaid
+flowchart TD
+    WA["Workflow A: CI Build\nse ejecuta en cualquier rama"]
+    COMP["CI Build: completed"]
+    SEARCH{{"¿archivo del workflow listener\nexiste en la rama por defecto?"}}
+    YES["Workflow B se activa\n(permisos del repo base)"]
+    NO["Workflow B NO se activa\n(archivo no encontrado en rama por defecto)"]
+
+    WA --> COMP
+    COMP --> SEARCH
+    SEARCH -->|"sí, existe en main/master"| YES
+    SEARCH -->|"no, solo en otra rama"| NO
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class WA root
+    class COMP,SEARCH warning
+    class YES secondary
+    class NO danger
+```
 
 ---
 

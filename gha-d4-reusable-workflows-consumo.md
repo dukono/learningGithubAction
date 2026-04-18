@@ -90,6 +90,19 @@ La cadena de propagación tiene tres niveles —todos obligatorios— y ocurre c
 
 Si cualquiera de los tres niveles falta, el caller recibirá una cadena vacía sin error explícito.
 
+```mermaid
+sequenceDiagram
+    participant Step as Step (callee)
+    participant Job as Job outputs: (callee)
+    participant WF as workflow_call outputs (callee)
+    participant Caller as Caller (needs.job.outputs)
+
+    Step->>Job: echo key=val >> GITHUB_OUTPUT
+    Job->>WF: key: ${{ steps.id.outputs.key }}
+    WF->>Caller: value: ${{ jobs.job-id.outputs.key }}
+    Note over Step,Caller: Si falta cualquier nivel, Caller recibe cadena vacía
+```
+
 ```yaml
 # En el caller: consumir el output del callee
 jobs:
@@ -110,12 +123,24 @@ jobs:
 
 GitHub Actions permite que un reusable workflow invoque a su vez otro reusable workflow, pero impone un límite estricto de **4 niveles de anidamiento** contando el workflow raíz (caller).
 
+```mermaid
+flowchart TD
+    N1[Nivel 1\nci.yml — caller original]:::primary
+    N2[Nivel 2\nbuild.yml — callee 1]:::neutral
+    N3[Nivel 3\ncompile.yml — callee 2]:::neutral
+    N4[Nivel 4\nlint.yml — callee 3\nlímite máximo]:::warning
+    N5[Nivel 5\nreport.yml]:::danger
+
+    N1 --> N2 --> N3 --> N4
+    N4 -. bloqueado .-> N5
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
 ```
-Nivel 1 — ci.yml (caller original)
-  Nivel 2 — build.yml (callee 1)
-    Nivel 3 — compile.yml (callee 2)
-      Nivel 4 — lint.yml  (callee 3)  ← límite máximo
-```
+
+*Límite de anidamiento de 4 niveles: el quinto nivel produce error de validación en tiempo de ejecución.*
 
 Si se intenta un quinto nivel, la ejecución falla en tiempo de validación con el error: _"Reusable workflows can only be nested to 4 levels deep"_.
 

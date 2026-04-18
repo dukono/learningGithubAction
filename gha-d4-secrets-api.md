@@ -65,6 +65,30 @@ El proceso completo tiene tres pasos:
 2. **Cifrar el valor** del secret con LibSodium usando esa clave pública
 3. **Enviar el secret cifrado** al endpoint PUT con `encrypted_value` y `key_id`
 
+```mermaid
+flowchart LR
+    S1[GET /secrets/public-key\nObtener key + key_id]:::primary
+    S2[LibSodium crypto_box_seal\nCifrar valor con public key]:::storage
+    S3[PUT /secrets/NOMBRE\nenviar encrypted_value + key_id]:::primary
+    S4{Respuesta}:::neutral
+    S5(201 Created\nSecret nuevo):::secondary
+    S6(204 No Content\nSecret actualizado):::secondary
+    S7(422 Unprocessable\nFalta key_id o nombre inválido):::danger
+
+    S1 --> S2 --> S3 --> S4
+    S4 --> S5
+    S4 --> S6
+    S4 --> S7
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef storage   fill:#6e40c9,color:#fff,stroke:#5a32a3
+```
+
+*Pipeline de creación/actualización de un secret via API: los tres pasos son obligatorios; omitir key_id produce error 422.*
+
 > [EXAMEN] El campo `key_id` es obligatorio en el body del PUT. GitHub lo usa para identificar qué clave pública se usó para cifrar el valor, ya que las claves pueden rotarse. Enviar solo `encrypted_value` sin `key_id` resulta en error 422.
 
 ## Ejemplo Central

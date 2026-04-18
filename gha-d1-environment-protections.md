@@ -76,41 +76,47 @@ La `url` es opcional pero recomendada: aparece como enlace clickable en la vista
 
 ## Diagrama de flujo: job con environment protection
 
-```
-Workflow disparado
-       |
-       v
-  Job build (sin environment) ---> ejecuta normalmente
-       |
-       v
-  Job deploy-production
-  environment: production
-       |
-       v
-  ¿Rama permitida por deployment rule?
-       |
-      NO --> job falla (policy violation)
-       |
-      SI
-       v
-  ¿Wait timer configurado? (ej: 5 min)
-       |
-      SI --> espera 5 minutos
-       |
-       v
-  ¿Required reviewers configurados?
-       |
-      SI --> job en estado "waiting"
-             GitHub notifica a reviewers
-                    |
-           +---------+---------+
-           |                   |
-        Aprueba            Rechaza
-           |                   |
-           v                   v
-     Job ejecuta         Job falla
-     con environment     (deployment
-     secrets y vars       rejected)
+```mermaid
+flowchart TD
+    WF(("Workflow disparado"))
+    BUILD["job: build\n(sin environment)"]
+    DEPLOY["job: deploy-production\nenvironment: production"]
+    BRANCH{{"¿Rama permitida\npor deployment rule?"}}
+    TIMER{{"¿Wait timer\nconfigurado?"}}
+    WAIT_T["espera N minutos"]
+    REVIEWER{{"¿Required reviewers\nconfigurados?"}}
+    WAIT_R["job en estado 'waiting'\nGitHub notifica a reviewers"]
+    APPROVE{{"¿Aprobado?"}}
+    RUN["job ejecuta\nenv secrets y vars disponibles"]
+    FAIL_P["job falla\n(policy violation)"]
+    FAIL_R["job falla\n(deployment rejected)"]
+
+    WF --> BUILD
+    BUILD --> DEPLOY
+    DEPLOY --> BRANCH
+    BRANCH -->|no| FAIL_P
+    BRANCH -->|sí| TIMER
+    TIMER -->|sí| WAIT_T
+    TIMER -->|no| REVIEWER
+    WAIT_T --> REVIEWER
+    REVIEWER -->|no| RUN
+    REVIEWER -->|sí| WAIT_R
+    WAIT_R --> APPROVE
+    APPROVE -->|aprueba| RUN
+    APPROVE -->|rechaza| FAIL_R
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class WF root
+    class BUILD,DEPLOY primary
+    class BRANCH,TIMER,REVIEWER,APPROVE warning
+    class WAIT_T,WAIT_R primary
+    class RUN secondary
+    class FAIL_P,FAIL_R danger
 ```
 
 ---

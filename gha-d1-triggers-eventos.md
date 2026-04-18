@@ -64,6 +64,19 @@ jobs:
         run: ./scripts/deploy-prod.sh "${{ github.event.client_payload.version }}"
 ```
 
+```mermaid
+sequenceDiagram
+    participant EXT as Sistema externo
+    participant API as GitHub API
+    participant WF as Workflow Runner
+
+    EXT->>API: POST /repos/{owner}/{repo}/dispatches
+    Note over EXT,API: body: event_type + client_payload
+    API->>WF: dispara on: repository_dispatch
+    Note over WF: types filtra por event_type
+    WF-->>EXT: ejecución iniciada (HTTP 204)
+```
+
 El token usado en la llamada API debe tener el scope `repo` para repositorios privados o `public_repo` para publicos.
 
 ---
@@ -73,6 +86,30 @@ El token usado en la llamada API debe tener el scope `repo` para repositorios pr
 El evento `release` se activa cuando se realizan acciones sobre releases del repositorio. El type mas usado en produccion es `published`, que se dispara cuando una release (incluidas pre-releases marcadas como publicadas) queda visible publicamente.
 
 La distincion entre types es importante: `created` se activa al guardar un borrador, `released` solo cuando se desmarca la opcion "pre-release", y `prereleased` cuando se marca como pre-release. Usar el type incorrecto puede provocar deploys no deseados a produccion.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft : crear / guardar borrador
+    Draft --> Prerelease : publicar marcado como pre-release
+    Draft --> Stable : publicar sin pre-release
+    Prerelease --> Stable : desmarcar pre-release
+
+    Draft --> [*] : eliminar
+    Prerelease --> [*] : eliminar
+    Stable --> [*] : eliminar
+
+    note right of Draft
+        type: created
+    end note
+    note right of Prerelease
+        type: published
+        type: prereleased
+    end note
+    note right of Stable
+        type: published
+        type: released
+    end note
+```
 
 ```yaml
 on:

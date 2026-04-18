@@ -22,24 +22,25 @@ Con secrets estáticos, el ciclo de vida de una credencial cloud tiene dos probl
 
 El proceso tiene cuatro participantes: el workflow, el servicio de tokens de GitHub Actions, el endpoint JWKS de GitHub y el cloud provider.
 
+```mermaid
+sequenceDiagram
+    participant W as Workflow Runner
+    participant GTS as GitHub Token Service
+    participant JWKS as GitHub JWKS Endpoint
+    participant CP as Cloud Provider
+
+    W->>GTS: POST ACTIONS_ID_TOKEN_REQUEST_URL<br/>(Authorization: bearer REQUEST_TOKEN)
+    GTS-->>W: JWT firmado RS256<br/>(claims: sub, iss, aud, repo, ref, environment...)
+
+    W->>CP: presentar JWT al STS del cloud provider
+    CP->>JWKS: GET /.well-known/openid-configuration<br/>+ GET /jwks (clave pública)
+    JWKS-->>CP: clave pública para verificar firma RS256
+
+    CP->>CP: verificar firma JWT<br/>validar claims vs trust policy<br/>(sub, aud, iss)
+    CP-->>W: credenciales temporales<br/>(AWS: STS token / Azure: access token / GCP: access token)
 ```
-Workflow                  GitHub Token Service        Cloud Provider
-   |                             |                         |
-   |-- solicitar OIDC token ---> |                         |
-   |   (ACTIONS_ID_TOKEN_REQUEST_URL + REQUEST_TOKEN)      |
-   |                             |                         |
-   |<-- JWT firmado (RS256) ---- |                         |
-   |                             |                         |
-   |-- presentar JWT ---------------------------------->  |
-   |                             |                         |
-   |                             | <-- GET /.well-known/openid-configuration
-   |                             |     + JWKS (verificar firma)
-   |                             |                         |
-   |                             |     validar claims vs trust policy
-   |                             |                         |
-   |<-- credenciales temporales ----------------------- |
-   |   (AWS: AssumeRoleWithWebIdentity / Azure: access token / GCP: access token)
-```
+
+*Flujo OIDC completo: el workflow obtiene un JWT de GitHub y lo intercambia por credenciales temporales del cloud; las claves privadas long-lived desaparecen del ciclo.*
 
 El endpoint JWKS de GitHub es `https://token.actions.githubusercontent.com/.well-known/jwks`. El cloud provider lo consulta para obtener la clave pública y verificar la firma del JWT. GitHub rota estas claves periódicamente; el cloud provider debe consultarlas en tiempo real (no cachearlas de forma permanente).
 
@@ -74,6 +75,28 @@ Cada JWT contiene un conjunto de claims que describen el contexto de ejecución.
 | `run_id` | ID único de la ejecución. | `9876543210` |
 
 El claim `sub` es el más importante para la trust policy. Su formato varía según el contexto del job:
+
+```mermaid
+mindmap
+  root((JWT OIDC\nGitHub Actions))
+    Identidad
+      iss: https://token.actions.githubusercontent.com
+      sub: repo:owner/repo:ref:refs/heads/main
+      aud: configurable por provider
+    Repositorio
+      repository: owner/repo
+      ref: refs/heads/main
+      sha: commit SHA
+    Ejecución
+      run_id: ID único del run
+      workflow: nombre del workflow
+      actor: usuario que disparó
+    Contexto de deployment
+      environment: production
+      job_workflow_ref: path del workflow
+```
+
+*Anatomía del JWT OIDC: los claims de identidad y contexto son los que la trust policy del cloud evalúa para decidir si concede acceso.*
 
 - Sin environment: `repo:owner/repo:ref:refs/heads/main`
 - Con environment: `repo:owner/repo:environment:production`

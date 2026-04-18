@@ -12,14 +12,28 @@ En pipelines complejos, raramente todos los jobs son independientes. Un job de d
 
 ## Diagrama de flujo: needs y condiciones
 
-```
-  [build] ──────────────────────────────────────────────────────────────┐
-      │ éxito                                                            │
-      ▼                                                                  │
-  [test]  ──── if: success() ────► [deploy]                             │
-      │                                                                  │
-      └──── if: failure() ─────► [notify-failure]  ◄────────────────────┘
-                                                       (también depende de build)
+```mermaid
+flowchart TD
+    B["job: build"]
+    T["job: test\nneeds: build"]
+    D["job: deploy\nneeds: test\nif: github.ref == 'refs/heads/main'"]
+    N["job: notify-failure\nneeds: [build, test, deploy]\nif: failure()"]
+
+    B --> T
+    T -->|"success()"| D
+    B -.->|"depende de"| N
+    T -.->|"depende de"| N
+    D -.->|"depende de"| N
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class B root
+    class T primary
+    class D secondary
+    class N warning
 ```
 
 La palabra clave `needs` define el grafo de dependencias; `if` decide si el nodo del grafo se activa o se omite una vez que sus dependencias han terminado.
@@ -82,6 +96,31 @@ deploy:
 Cuando `cancel-in-progress: true`, cualquier ejecución anterior del grupo que aún esté en curso se cancela en el momento en que arranca la nueva. Si se omite o es `false`, la nueva ejecución queda en cola hasta que la anterior termine.
 
 **Diferencia con `concurrency` de workflow:** la propiedad `concurrency` en la raíz del workflow afecta a todas las ejecuciones del workflow completo; la propiedad dentro de un job afecta exclusivamente a ese job y permite que otros jobs del mismo workflow se ejecuten sin restricción. Esto es útil cuando solo el job de despliegue necesita exclusividad, pero los jobs de compilación y pruebas pueden correr en paralelo sin problema.
+
+```mermaid
+flowchart LR
+    subgraph CI["cancel-in-progress: false (producción)"]
+        direction LR
+        R1A["run A\nen curso"]
+        R1B["run B\nen cola (waiting)"]
+        R1A -->|"A termina"| R1B
+    end
+
+    subgraph CS["cancel-in-progress: true (staging)"]
+        direction LR
+        R2A["run A\nen curso"]
+        R2B["run B\narranca"]
+        R2A -->|"B cancela A"| R2B
+    end
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+
+    class R1A,R2A primary
+    class R1B secondary
+    class R2B secondary
+```
 
 ### `timeout-minutes`: límite máximo de duración del job
 

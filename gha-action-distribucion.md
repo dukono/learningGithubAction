@@ -18,6 +18,31 @@ La diferencia entre los modos es fundamentalmente sobre qué repositorios pueden
 | Pública | Público | Cualquier workflow en GitHub | `owner/repo@ref` |
 | Interna | Privado (org/enterprise) | Repos de la misma org | `owner/repo@ref` (con acceso configurado) |
 
+```mermaid
+flowchart TD
+    Q1{{"¿La action se usa\nsolo en este repo?"}}
+    Q2{{"¿Debe ser accesible\nfuera de la organización?"}}
+    LOCAL["Action local\n./.github/actions/nombre\n(sin repo externo)"]
+    INTERNAL["Action interna\nrepo privado org\nowner/repo@ref"]
+    PUBLIC["Action pública\nrepo público\nowner/repo@ref"]
+
+    Q1 -->|sí| LOCAL
+    Q1 -->|no| Q2
+    Q2 -->|no — solo la org| INTERNAL
+    Q2 -->|sí — o en Marketplace| PUBLIC
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class Q1,Q2 warning
+    class LOCAL root
+    class INTERNAL primary
+    class PUBLIC secondary
+```
+*La sintaxis `uses:` es idéntica para pública e interna; la diferencia es la visibilidad del repositorio.*
+
 ## Action local (privada al repositorio)
 
 Una action local se define en el directorio `.github/actions/` del mismo repositorio que la usa. Solo los workflows de ese repositorio pueden invocarla; no es accesible desde repositorios externos. La sintaxis de referencia usa una ruta relativa con `./` en lugar de `owner/repo@ref`.

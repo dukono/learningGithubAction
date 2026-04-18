@@ -45,6 +45,30 @@ branding:                                     # opcional; requerido para Marketp
   color: 'green'                              # white|yellow|blue|green|orange|red|purple|gray-dark
 ```
 
+```mermaid
+mindmap
+  root((action.yml))
+    (name / description / author)
+    (inputs)
+      nombre-input
+        description
+        required
+        default
+    (outputs)
+      nombre-output
+        description
+        value
+    (runs — obligatorio)
+      using: node20 / docker / composite
+      [JS] main / pre / post
+      [Docker] image / entrypoint / args
+      [Composite] steps
+    (branding — Marketplace)
+      icon
+      color
+```
+*`runs` es el único bloque verdaderamente obligatorio junto con `name` y `description`.*
+
 ## Nombre del fichero y ubicación
 
 El fichero debe llamarse `action.yml` o `action.yaml` (ambos son válidos) y estar en la raíz del repositorio. Si la action está en un subdirectorio, la ruta completa forma parte de la referencia `uses:` (ej: `owner/repo/path/to/action@ref`). GitHub no acepta el fichero en ninguna otra ubicación para identificar el repositorio como una action.

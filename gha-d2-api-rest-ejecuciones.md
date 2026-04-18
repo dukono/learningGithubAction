@@ -71,6 +71,26 @@ Link: <https://api.github.com/repos/owner/repo/actions/runs?page=2>; rel="next",
       <https://api.github.com/repos/owner/repo/actions/runs?page=10>; rel="last"
 ```
 
+```mermaid
+flowchart LR
+    REQ["GET /actions/runs\n?per_page=100&page=1"] --> RESP["200 OK\nruns[0..99]"]
+    RESP --> CHK{{"¿Header Link\ncontiene rel=next?"}}
+    CHK -->|no| DONE(("Todos los resultados\nobtenidos"))
+    CHK -->|sí| NEXT["GET URL de rel=next\n(siguiente página)"]
+    NEXT --> RESP
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class REQ,NEXT primary
+    class RESP warning
+    class CHK root
+    class DONE secondary
+```
+*Bucle de paginación: iterar sobre el header Link rel=next hasta que desaparezca.*
+
 ## Disparar un workflow via API con workflow_dispatch
 
 Para disparar un workflow mediante la API, ese workflow debe tener el trigger `workflow_dispatch` definido en su configuración. Sin ese trigger, la API devuelve un error `422 Unprocessable Entity`.
@@ -171,6 +191,21 @@ head -20 "job_${job_id}.log"
 ```
 
 Hay un detalle importante en el paso 4: el endpoint de descarga de logs devuelve un código `302 Found` con una URL firmada de Azure Blob Storage en el encabezado `Location`. Si no usas `--location` en curl (o el equivalente en tu cliente HTTP), obtendrás el redirect en lugar del contenido real. El token de acceso no se reenvía en la redirección, por lo que la URL firmada es temporal y no requiere autenticación adicional.
+
+```mermaid
+sequenceDiagram
+    participant C as Cliente (curl)
+    participant API as GitHub API
+    participant AZ as Azure Blob Storage
+
+    C->>API: GET /jobs/{job_id}/logs<br/>Authorization: Bearer TOKEN
+    API-->>C: 302 Found<br/>Location: https://blob.core.windows.net/signed-url
+
+    Note over C: --location sigue la redirección automáticamente
+    C->>AZ: GET /signed-url (sin Authorization header)
+    AZ-->>C: 200 OK — contenido del log como texto plano
+```
+*El endpoint de logs delega en Azure Blob Storage mediante un 302 — usar --location en curl es obligatorio para obtener el contenido.*
 
 ## Obtener detalles de un workflow run
 

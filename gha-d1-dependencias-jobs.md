@@ -14,26 +14,29 @@ Un workflow de GitHub Actions no es una secuencia lineal de pasos: es un grafo d
 
 El patrón más habitual en CI/CD combina fan-out (un job dispara varios en paralelo) con fan-in (varios jobs convergen en uno que los espera a todos):
 
-```
-          ┌─────────┐
-          │  build  │  ← job raíz, sin needs
-          └────┬────┘
-               │  outputs: image_tag, artifact_path
-       ┌───────┴───────┐
-       ▼               ▼
-  ┌─────────┐    ┌──────────┐
-  │  test   │    │  lint    │   ← fan-out: corren en paralelo
-  └────┬────┘    └────┬─────┘
-       │              │
-       └──────┬────────┘
-              ▼
-         ┌─────────┐
-         │ deploy  │  ← fan-in: espera test Y lint
-         └────┬────┘
-              │
-         ┌────┴─────┐
-         │  notify  │  ← siempre corre (uses if: always())
-         └──────────┘
+```mermaid
+flowchart TD
+    B["job: build\n(nodo raíz, sin needs)"]
+    T["job: test"]
+    L["job: lint"]
+    D["job: deploy\n(fan-in: needs test + lint)"]
+    N["job: notify\nif: always()"]
+
+    B -->|"outputs: image_tag, artifact_path"| T
+    B --> L
+    T --> D
+    L --> D
+    D --> N
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class B root
+    class T,L primary
+    class D secondary
+    class N warning
 ```
 
 ---
@@ -177,6 +180,37 @@ jobs:
 ```
 
 Sin `if: always()`, un job de notificación situado al final del pipeline nunca se ejecutaría cuando ocurre un fallo, que es precisamente cuando más se necesita. Es uno de los patrones más importantes para pipelines robustos.
+
+```mermaid
+flowchart TD
+    DEP{{"¿algún needs\nfalla/cancela?"}}
+    ALL_OK["todos los needs: success"]
+    COND{{"¿tiene condición if?"}}
+    ALWAYS{{"¿if: always()?"}}
+    FAILCOND{{"¿if: failure()?"}}
+
+    RUN(("job se ejecuta"))
+    SKIP(("job = skipped"))
+
+    DEP -->|no| ALL_OK
+    DEP -->|sí| COND
+    ALL_OK --> RUN
+    COND -->|no| SKIP
+    COND -->|sí| ALWAYS
+    ALWAYS -->|sí| RUN
+    ALWAYS -->|no| FAILCOND
+    FAILCOND -->|sí| RUN
+    FAILCOND -->|no| SKIP
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class DEP,COND,ALWAYS,FAILCOND warning
+    class RUN secondary
+    class SKIP danger
+```
 
 ---
 

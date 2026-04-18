@@ -12,13 +12,14 @@ Los **starter workflows** (plantillas de workflow) permiten a las organizaciones
 
 El repositorio especial `.github` de una organización actúa como almacén de configuración compartida. Dentro de él, la carpeta `.github/workflow-templates/` alberga las plantillas de workflow disponibles para todos los repositorios de esa organización.
 
-```
-<org>/.github/
-└── workflow-templates/
-    ├── ci.yml
-    ├── ci.properties.json
-    ├── deploy.yml
-    └── deploy.properties.json
+```mermaid
+mindmap
+  root((<org>/.github))
+    workflow-templates/
+      ci.yml
+      ci.properties.json
+      deploy.yml
+      deploy.properties.json
 ```
 
 > [CONCEPTO] Solo los administradores del repositorio `.github` de la organización pueden crear, editar o eliminar starter workflows. Los miembros con acceso de escritura en sus propios repositorios solo pueden *usar* las plantillas, no gestionarlas.
@@ -114,6 +115,31 @@ Una vez creados los dos ficheros en el repositorio `.github` de la organización
 4. Seleccionar la plantilla y hacer clic en **Configure**.
 
 GitHub abre el editor con el YAML ya copiado y sustituye `$default-branch` por la rama predeterminada real. El usuario guarda el fichero en su propio repositorio — a partir de ese momento el workflow es independiente de la plantilla original.
+
+```mermaid
+flowchart LR
+    A([Admin crea plantilla]) --> B[(org/.github/\nworkflow-templates/)]
+    B --> C{Usuario crea\nnuevo workflow}
+    C --> D[/Selecciona plantilla\nen la UI/]
+    D --> E[GitHub sustituye\n$default-branch]
+    E --> F[(Copia en\nrepo del usuario)]
+    F --> G([Workflow independiente\nde la plantilla original])
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef storage   fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class A primary
+    class B,F storage
+    class C neutral
+    class D neutral
+    class E primary
+    class G secondary
+```
+
+*Ciclo de vida de un starter workflow: la plantilla se copia al repositorio destino y queda desconectada de la original.*
 
 ## Tabla de elementos clave
 

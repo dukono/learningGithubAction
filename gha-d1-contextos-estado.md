@@ -40,6 +40,34 @@ El contexto `steps` permite a un step acceder a los resultados de steps anterior
 
 La diferencia entre `outcome` y `conclusion` es sutil pero importante para el examen. Si un step falla (`outcome: failure`) pero tiene `continue-on-error: true`, su `conclusion` será `success` porque el job no se interrumpió. Usar `outcome` permite detectar el fallo real; usar `conclusion` refleja el impacto visible en el job.
 
+```mermaid
+flowchart TD
+    STEP[["step ejecuta"]]
+    FAIL{{"¿step falla?"}}
+    COE{{"¿continue-on-error: true?"}}
+
+    OK["outcome = success\nconclusion = success"]
+    F1["outcome = failure\nconclusion = failure\n→ job falla"]
+    F2["outcome = failure\nconclusion = success\n→ job continúa"]
+
+    STEP --> FAIL
+    FAIL -->|no| OK
+    FAIL -->|sí| COE
+    COE -->|no| F1
+    COE -->|sí| F2
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class STEP root
+    class FAIL,COE warning
+    class OK secondary
+    class F1 danger
+    class F2 warning
+```
+
 ```yaml
 steps:
   - id: build
@@ -83,6 +111,24 @@ jobs:
 ```
 
 `needs` solo referencia dependencias directas. Si `deploy` depende de `test` y `test` depende de `build`, `deploy` no puede acceder a `needs.build` a menos que lo declare explícitamente en su propia clave `needs`.
+
+```mermaid
+sequenceDiagram
+    participant SP as step (id: versioning)
+    participant JB as job: build
+    participant ND as needs
+    participant JD as job: deploy
+
+    SP->>SP: echo "version=1.4.2" >> $GITHUB_OUTPUT
+    Note right of SP: steps.versioning.outputs.version
+
+    JB->>ND: outputs.artifact-version:<br/>${{ steps.versioning.outputs.version }}
+    Note over JB,ND: declarado en outputs: del job
+
+    ND->>JD: needs.build.outputs.artifact-version
+    ND->>JD: needs.build.result
+    Note right of JD: requiere needs: build en el job
+```
 
 ---
 

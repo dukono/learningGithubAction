@@ -12,25 +12,28 @@ Cuando un step termina, el runner captura su código de salida (exit code) y dec
 
 El siguiente diagrama muestra cómo el runner evalúa el exit code de cada step y qué resultado propaga al job:
 
+```mermaid
+flowchart TD
+    EXEC(("step ejecuta")) --> CHK{{"¿exit code == 0?"}}
+    CHK -->|sí| OK(("outcome=success"))
+    CHK -->|no| FAIL["outcome=failure"]
+    FAIL --> COE{{"¿continue-on-error: true?"}}
+    COE -->|sí| CONT(("conclusion=success → siguiente step"))
+    COE -->|no| TMOUT{{"¿timeout superado?"}}
+    TMOUT -->|sí| CANC["outcome=cancelled"]
+    TMOUT -->|no| JOBFAIL["job termina en failure"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class EXEC root
+    class CHK,COE,TMOUT warning
+    class OK,CONT secondary
+    class FAIL,CANC,JOBFAIL danger
 ```
-Step ejecuta su comando
-         │
-         ▼
-  exit code == 0?
-    ├─ SÍ ──► outcome=success ──► siguiente step
-    └─ NO ──► outcome=failure
-                   │
-                   ▼
-     continue-on-error: true?
-       ├─ SÍ ──► conclusion=success ──► siguiente step
-       │         (outcome sigue siendo failure)
-       └─ NO ──► job termina en failure
-                   │
-                   ▼
-     ¿timeout-minutes superado?
-       ├─ SÍ ──► outcome=cancelled
-       └─ NO ──► (ya falla por exit code != 0)
-```
+*Evaluación del exit code: outcome refleja el resultado real; conclusion aplica continue-on-error.*
 
 > [CONCEPTO] `steps.<id>.outcome` refleja el resultado real del step: `success`, `failure`, `skipped` o `cancelled`. `steps.<id>.conclusion` es el valor tras aplicar `continue-on-error`; puede ser `success` aunque el step haya fallado. El job evalúa `conclusion`, no `outcome`.
 

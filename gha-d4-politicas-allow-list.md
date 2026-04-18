@@ -17,6 +17,29 @@ La ruta completa en la UI es:
 
 GitHub ofrece exactamente cuatro opciones para controlar qué actions pueden usarse. Elegir la opción incorrecta es uno de los errores de configuración más frecuentes en equipos que escalan.
 
+```mermaid
+flowchart TD
+    START([Settings > Actions > General]) --> Q1{Nivel de\nrestricción\nnecesario?}
+    Q1 -- Máximo --> LOCAL[Allow local\nactions only]:::danger
+    Q1 -- Bajo --> ALL[Allow all actions]:::warning
+    Q1 -- Equilibrado --> VERIFIED[Allow GitHub-created\n+ verified Marketplace]:::secondary
+    Q1 -- Granular --> SELECT[Allow select actions\ncon comodines]:::primary
+
+    LOCAL --> R1(Solo rutas ./)
+    ALL --> R2(Todo el marketplace\nRiesgo máximo)
+    VERIFIED --> R3(actions/* + publishers\nverificados)
+    SELECT --> R4(Lista explícita\nowner/repo@*)
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class START neutral
+    class Q1 neutral
+```
+
 | Opción | Qué permite | Cuándo usarla |
 |---|---|---|
 | **Allow all actions** | Cualquier action del marketplace, repositorios externos y locales | Solo en entornos de experimentación o repos personales. Riesgo máximo en orgs. |
@@ -52,6 +75,31 @@ Existen dos niveles de política configurable en Settings > Actions > General:
 **Require approval for all outside collaborators:** todos los PRs desde cuentas que no sean miembros del repositorio (o de la organización, según el contexto) requieren aprobación manual en cada ejecución. Es la opción más conservadora.
 
 El flujo de aprobación en la UI funciona así: el maintainer ve el PR con un banner amarillo que indica que los workflows están pendientes de aprobación. Un botón "Approve and run" dispara la ejecución. Sin esa aprobación, ningún runner procesa el workflow aunque el código esté correctamente configurado.
+
+```mermaid
+flowchart TD
+    PR([PR abierto desde fork]) --> Q1{¿El autor es\nmiembro/colaborador?}
+    Q1 -- Sí --> RUN(Ejecución automática):::secondary
+    Q1 -- No --> Q2{Política activa}
+    Q2 -- first-time contributors --> Q3{¿Primer PR\ndel autor?}
+    Q3 -- Sí --> WAIT[Workflow pendiente\nde aprobación]:::warning
+    Q3 -- No --> RUN
+    Q2 -- all outside collaborators --> WAIT
+    WAIT --> REVIEW{Maintainer\nrevisa el PR}
+    REVIEW -- Aprueba --> RUN
+    REVIEW -- Rechaza --> BLOCK(Workflow bloqueado):::danger
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class PR neutral
+    class Q1,Q2,Q3,REVIEW neutral
+```
+
+*Flujo de aprobación para fork PRs: la política determina cuándo se requiere intervención manual del maintainer.*
 
 > **Punto clave de diseño:** las fork PR policies no afectan a contributors que ya son miembros de la organización o tienen el rol de collaborator en el repo. Solo aplican a cuentas externas que envían PRs desde forks. Un collaborator con permiso `write` no activa el flujo de aprobación.
 

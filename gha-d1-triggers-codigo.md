@@ -78,6 +78,29 @@ Los tres eventos de código cubren escenarios distintos y es importante elegir e
 | Riesgo con forks | Bajo | Bajo | Alto si se hace checkout del PR |
 | Filtros disponibles | branches, paths, tags | branches, paths, types | branches, paths, types |
 
+```mermaid
+graph TD
+    PUSH["push"]
+    PR["pull_request"]
+    PRT["pull_request_target"]
+
+    PUSH -->|"ejecuta código"| BASE1["rama base\nacceso completo a secrets"]
+    PR -->|"ejecuta código"| FORK["código del fork\nsin acceso a secrets"]
+    PRT -->|"ejecuta código"| BASE2["rama base\nacceso completo a secrets"]
+
+    PRT -->|"RIESGO"| WARN["Ejecuta código base\npero recibe datos del fork\nVector de inyeccion"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+
+    class PUSH,PR,PRT root
+    class BASE1,BASE2 secondary
+    class FORK primary
+    class WARN danger
+```
+
 ---
 
 ## Filtro `branches` vs `branches-ignore`
@@ -188,6 +211,31 @@ La siguiente tabla resume los filtros disponibles por evento y sus valores por d
 | `tags` | Si | No | No | ningún tag |
 | `tags-ignore` | Si | No | No | ninguno |
 | `types` | No | Si | Si | opened, synchronize, reopened |
+
+Cuando `branches` y `paths` se combinan en el mismo evento `push` o `pull_request`, ambos filtros se evalúan en serie con lógica AND: el workflow solo se activa si la rama coincide Y algún archivo modificado coincide.
+
+```mermaid
+flowchart TD
+    E([push / pull_request]) --> BF{"¿filtro branches\nactivo?"}
+    BF -->|"no"| PF{"¿filtro paths\nactivo?"}
+    BF -->|"sí"| BM{"¿la rama coincide\ncon el patrón?"}
+    BM -->|"no"| SKIP(["workflow no se activa"])
+    BM -->|"sí"| PF
+    PF -->|"no"| RUN(["workflow se activa"])
+    PF -->|"sí"| PM{"¿algún archivo modificado\ncoincide con paths?"}
+    PM -->|"no"| SKIP
+    PM -->|"sí"| RUN
+
+    classDef root     fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary  fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger   fill:#cf222e,color:#fff,stroke:#a40e26
+
+    class E root
+    class BF,BM,PF,PM primary
+    class RUN secondary
+    class SKIP danger
+```
 
 ---
 

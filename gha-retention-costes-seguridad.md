@@ -52,6 +52,35 @@ El cache poisoning es un ataque en el que un actor malicioso contamina la caché
 
 El escenario típico es el siguiente: un fork del repositorio envía un pull request con un workflow modificado. Si el repositorio permite que los workflows de forks accedan a la caché (lo que ocurre en ciertos contextos con `pull_request_target` mal configurado), el workflow del fork puede ejecutar código arbitrario que escribe en la caché con una clave que posteriormente restaurará el workflow legítimo del repositorio base.
 
+```mermaid
+flowchart TD
+    Attacker["Atacante\ncrea fork"] --> MalPR["Envía PR\ncon código malicioso"]
+    MalPR --> PRT{{"Repo usa\npull_request_target?"}}
+    PRT -->|"No → pull_request"| Isolated["Fork aislado:\nsin acceso a\nsecrets ni caché base"]
+    PRT -->|"Sí"| BaseCtx["Ejecuta en contexto\ndel repo base\n(acceso a secrets + caché)"]
+    BaseCtx --> Checkout{{"Hace checkout\ndel código del PR?"}}
+    Checkout -->|"No"| SafePRT["pull_request_target\nseguro: no ejecuta\ncódigo del fork"]
+    Checkout -->|"Sí"| MalCode["Código malicioso\nen runner del repo base"]
+    MalCode --> PoisonCache["Escribe en caché\ncon clave genérica\n(restore-key match)"]
+    PoisonCache --> LegitRun["Workflow legítimo\nfuturo restaura\ncaché envenenada"]
+    LegitRun --> Compromise["Compromiso\ndel pipeline\nde CI/CD"]
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class Attacker,MalPR danger
+    class PRT,Checkout warning
+    class Isolated,SafePRT secondary
+    class BaseCtx warning
+    class MalCode,PoisonCache,LegitRun,Compromise danger
+```
+
+*Cadena de cache poisoning: la combinación `pull_request_target` + checkout del PR + restore-keys genéricos es el vector completo. Cada eslabón es necesario para que el ataque funcione.*
+
 > [ADVERTENCIA] El vector de cache poisoning más peligroso es la combinación de `pull_request_target` con `actions/checkout` del código del PR y `actions/cache` con restore-keys genéricos. Un fork puede enviar un PR que envenene la caché con binarios maliciosos que el workflow de CI del repositorio base restaurará en futuras ejecuciones.
 
 La mitigación principal es el propio scope de la caché: las caché creadas en forks (en el contexto de `pull_request`) son aisladas del repositorio base. Sin embargo, si se usa `pull_request_target` (que ejecuta el workflow del repositorio base con acceso a secrets), el aislamiento se rompe.

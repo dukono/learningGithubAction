@@ -12,6 +12,39 @@ La estrategia de cacheo se basa en dos componentes: la `key` (clave exacta) y lo
 
 Un **cache hit** completo ocurre cuando la clave exacta coincide: el step de restore restaura los archivos y, al final del job, el step de guardado **no se ejecuta** (la caché no cambia). Un **cache miss con restore parcial** ocurre cuando solo coincide un `restore-key`: los archivos se restauran parcialmente y, al final del job, la nueva caché **sí se guarda** con la clave exacta, reemplazando la entrada más antigua si se supera el límite.
 
+```mermaid
+flowchart TD
+    Start(["Job inicia\nstep de cache"]) --> LookupExact{{"¿Coincidencia\nexacta con key?"}}
+    LookupExact -->|"Sí"| HitExact["Cache HIT\nRestaura archivos\ncompletos"]
+    LookupExact -->|"No"| LookupPartial{{"¿Coincide algún\nrestore-key?"}}
+    LookupPartial -->|"Sí"| PartialRestore["Cache PARTIAL\nRestaura entrada\nmás reciente con\nel prefijo"]
+    LookupPartial -->|"No"| CacheMiss["Cache MISS\nNo se restaura nada\ndependencias vacías"]
+    HitExact --> RunJob["Job se ejecuta\n(con cache completo)"]
+    PartialRestore --> RunJob
+    CacheMiss --> RunJob
+    RunJob --> SaveDecision{{"¿Fue HIT\nexacto?"}}
+    SaveDecision -->|"Sí"| NoSave["NO guarda\nnueva entrada\n(caché sin cambio)"]
+    SaveDecision -->|"No (partial\no miss)"| SaveNew["Guarda nueva\nentrada con\nla key exacta"]
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class Start neutral
+    class LookupExact,LookupPartial,SaveDecision warning
+    class HitExact secondary
+    class PartialRestore primary
+    class CacheMiss danger
+    class RunJob neutral
+    class NoSave secondary
+    class SaveNew primary
+```
+
+*Árbol de decisión del cache: solo el hit exacto evita guardar una nueva entrada al final del job.*
+
 > [CONCEPTO] La diferencia entre hit y restore determina si se guarda o no una nueva entrada al final del job. Un hit exacto nunca genera una nueva entrada; un restore parcial siempre genera una nueva.
 
 La función `hashFiles()` es la herramienta principal para construir claves basadas en el contenido de lockfiles. Cambia automáticamente cuando cambia el archivo de dependencias, invalidando la caché cuando las dependencias realmente cambian.
@@ -35,6 +68,31 @@ El scope de la caché es una de las restricciones más importantes y menos intui
 - La rama default del repositorio (`main` o `master`).
 
 Las ramas hijo **nunca** pueden leer la caché de las ramas hijo de otras ramas. Un workflow en `feature/login` puede leer la caché de `main`, pero no puede leer la caché de `feature/payments`. Esta restricción existe por seguridad: evita que ramas no relacionadas compartan estado potencialmente contaminado.
+
+```mermaid
+flowchart LR
+    MainCache["Cache\ncreada en main"]
+    FeatureXCache["Cache\ncreada en feature/x"]
+    FeatureYCache["Cache\ncreada en feature/y"]
+
+    MainCache -->|"accesible desde\ncualquier rama"| AnyBranch["feature/x\nfeature/y\nrelease/*\n..."]
+    FeatureXCache -->|"accesible desde"| FeatureX["feature/x\n(misma rama)"]
+    FeatureXCache -->|"accesible desde"| PRtoX["PRs cuya\nbase sea feature/x"]
+    FeatureXCache -.->|"NO accesible"| FeatureY["feature/y\n(rama hermana)"]
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class MainCache secondary
+    class FeatureXCache,FeatureYCache primary
+    class AnyBranch,FeatureX,PRtoX neutral
+    class FeatureY danger
+```
+
+*Scope de caché: la caché de `main` es universal; la de ramas feature solo es visible por la propia rama y PRs que apunten a ella.*
 
 > [EXAMEN] Una caché creada en `main` es accesible desde cualquier rama del repositorio. Una caché creada en `feature/x` solo es accesible desde `feature/x` y desde PRs que apunten a `feature/x`.
 

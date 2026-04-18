@@ -134,6 +134,23 @@ services:
 
 GitHub Actions espera a que el health check reporte `healthy` antes de ejecutar el primer step. Si el contenedor no alcanza el estado `healthy` en el tiempo límite, el job falla con un error de timeout.
 
+```mermaid
+stateDiagram-v2
+    [*] --> starting : docker create
+    starting --> healthy : health-cmd ok dentro de los reintentos
+    starting --> unhealthy : reintentos agotados
+    healthy --> steps_running : primer step comienza
+    steps_running --> [*] : job termina
+
+    unhealthy --> [*] : job falla (timeout)
+
+    note right of starting
+        --health-interval: frecuencia de verificación
+        --health-retries: intentos antes de unhealthy
+        --health-start-period: gracia inicial
+    end note
+```
+
 ---
 
 ## Acceso desde steps en runner host: `localhost:puerto`
@@ -187,34 +204,27 @@ steps:
 
 ## Diagrama de networking
 
-```
-Runner host (ubuntu-latest)
-┌─────────────────────────────────────────────────────────┐
-│                                                         │
-│  Steps del job (proceso en el runner)                   │
-│  Acceso: localhost:5432                                 │
-│                          │                              │
-│         ┌────────────────▼──────────┐                  │
-│         │  Service container: db    │                  │
-│         │  image: postgres:16.2     │                  │
-│         │  puerto interno: 5432     │                  │
-│         │  host port: 5432          │                  │
-│         └───────────────────────────┘                  │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph HOST["Escenario 1: Runner host (sin container:)"]
+        direction LR
+        S1["Steps del job\n(proceso en el runner)"]
+        SC1[("Service container: db\nimage: postgres:16.2\nhost port: 5432")]
+        S1 -->|"localhost:5432"| SC1
+    end
 
-Container job (con container: en el job)
-┌─────────────────────────────────────────────────────────┐
-│  Red Docker interna                                     │
-│                                                         │
-│  ┌──────────────────────┐   ┌──────────────────────┐   │
-│  │  Container del job   │   │ Service container    │   │
-│  │  (runner container)  │──▶│ hostname: db         │   │
-│  │                      │   │ puerto: 5432         │   │
-│  │  Acceso: db:5432     │   │                      │   │
-│  └──────────────────────┘   └──────────────────────┘   │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+    subgraph CJOB["Escenario 2: Container job (con container:)"]
+        direction LR
+        JC["Container del job\n(runner container)"]
+        SC2[("Service container\nhostname: db\npuerto interno: 5432")]
+        JC -->|"db:5432"| SC2
+    end
+
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef storage fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class S1,JC primary
+    class SC1,SC2 storage
 ```
 
 ---

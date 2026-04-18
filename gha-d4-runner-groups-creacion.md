@@ -17,6 +17,31 @@ Los runner groups operan en dos niveles:
 - **Nivel organización**: controla qué repositorios dentro de la org pueden usar los runners del grupo.
 - **Nivel enterprise**: controla qué organizaciones dentro del enterprise pueden usar los runners del grupo, y además define límites superiores para los runner groups de organización.
 
+```mermaid
+flowchart TD
+    ENT[Enterprise runner group\ncontrola acceso por org]:::root
+    ENT --> OA[Org A\npermitida]:::secondary
+    ENT --> OB[Org B\npermitida]:::secondary
+    ENT --> OC[Org C\nno permitida]:::danger
+
+    OA --> RGA[Runner group org A\ncontrola acceso por repo]:::primary
+    RGA --> R1[(Repo frontend)]:::neutral
+    RGA --> R2[(Repo backend)]:::neutral
+
+    OB --> RGB[Runner group org B]:::primary
+    RGB --> R3[(Repo mobile)]:::neutral
+
+    OC --> NOAC(Sin acceso a\nrunners enterprise):::danger
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+```
+
+*Jerarquía de runner groups: el nivel enterprise establece el techo de acceso por organización; el nivel org controla qué repositorios usan cada grupo.*
+
 ## El runner group predeterminado: Default
 
 Cuando se registra un nuevo runner self-hosted en una organización, se asigna automáticamente al runner group llamado **Default**. Este grupo existe en todas las organizaciones y no puede eliminarse.

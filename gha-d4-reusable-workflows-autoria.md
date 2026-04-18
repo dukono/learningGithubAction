@@ -136,6 +136,32 @@ El alcance desde el que un callee puede ser invocado depende de la visibilidad d
 
 Para invocar un callee de otro repositorio, la organización propietaria del callee debe haber habilitado la opción **"Allow reusable workflows"** en la configuración de Actions de la organización o del repositorio.
 
+```mermaid
+flowchart TD
+    CALLER([Caller workflow]) --> Q1{Callee en\nmismo repo?}
+    Q1 -- Sí --> OK1(Siempre permitido)
+    Q1 -- No --> Q2{Visibilidad\ndel callee?}
+    Q2 -- Público --> OK2(Siempre permitido)
+    Q2 -- Internal --> Q3{Allow reusable\nworkflows activo\nen la org?}
+    Q2 -- Privado --> Q4{Allow reusable\nworkflows en\nel repo?}
+    Q3 -- Sí --> OK3(Permitido\ndentro de la org)
+    Q3 -- No --> ERR1[Error 404]
+    Q4 -- Sí --> OK4(Permitido\ndentro de la org)
+    Q4 -- No --> ERR2[Error 404]
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class CALLER primary
+    class Q1,Q2,Q3,Q4 neutral
+    class OK1,OK2,OK3,OK4 secondary
+    class ERR1,ERR2 danger
+```
+
+*Árbol de decisión para invocar un callee cross-repo: la visibilidad del repositorio y la configuración de la org determinan si la llamada es válida.*
+
 ## Ejemplo central
 
 El siguiente workflow es un callee completo que implementa un pipeline de build parametrizado. Acepta el entorno y la versión como inputs, requiere una clave de despliegue como secret y expone la ruta del artefacto generado como output.
@@ -207,7 +233,25 @@ jobs:
           echo "Entorno: ${{ inputs.environment }} | Versión: ${{ inputs.version }}"
 ```
 
-La cadena de output en este ejemplo: el step `package` escribe `artifact-path` en `$GITHUB_OUTPUT` → el job `build` lo eleva en su bloque `outputs:` → el bloque `on.workflow_call.outputs` lo reexpone con `value: ${{ jobs.build.outputs.artifact-path }}`. El caller accederá a este valor con `needs.<job-id>.outputs.artifact-path`.
+La cadena de output en este ejemplo: el step `package` escribe `artifact-path` en `$GITHUB_OUTPUT` → el job `build` lo eleva en su bloque `outputs:` → el bloque `on.workflow_call.outputs` lo reexposa con `value: ${{ jobs.build.outputs.artifact-path }}`. El caller accederá a este valor con `needs.<job-id>.outputs.artifact-path`.
+
+```mermaid
+flowchart LR
+    A[/Step escribe\necho key=val >> GITHUB_OUTPUT/] --> B[Job eleva\noutputs: key: steps.id.outputs.key]
+    B --> C[workflow_call.outputs\nvalue: jobs.job.outputs.key]
+    C --> D[/Caller lee\nneeds.callee.outputs.key/]
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class A primary
+    class B,C neutral
+    class D secondary
+```
+
+*Los tres niveles obligatorios para propagar un output desde un callee al caller: cualquier nivel ausente devuelve cadena vacía.*
 
 ## Tabla de elementos clave
 

@@ -97,36 +97,29 @@ Desde la API, se hace una petición POST a `/repos/{owner}/{repo}/actions/workfl
 
 El siguiente diagrama muestra el proceso de decisión que GitHub sigue cuando recibe un evento, desde la recepción hasta la creación (o no) de una ejecución.
 
+```mermaid
+flowchart TD
+    EVT(("Evento recibido")) --> CHK1{{"¿Workflow .yml en\nrama con ese evento?"}}
+    CHK1 -->|no| SKIP1["No hay ejecución"]
+    CHK1 -->|sí| CHK2{{"¿Coinciden filtros\nbranches / tags / paths?"}}
+    CHK2 -->|no| SKIP2["No hay ejecución"]
+    CHK2 -->|sí| CHK3{{"¿Workflow habilitado\nen el repositorio?"}}
+    CHK3 -->|no| SKIP3["No hay ejecución"]
+    CHK3 -->|sí| RUN["Workflow run creado\nestado: queued"]
+    RUN --> QUEUE["Jobs en cola según\ndisponibilidad de runners"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+
+    class EVT root
+    class CHK1,CHK2,CHK3 warning
+    class SKIP1,SKIP2,SKIP3 danger
+    class RUN,QUEUE secondary
 ```
-Evento recibido (push, pull_request, etc.)
-         |
-         v
-¿Existe archivo .github/workflows/*.yml
- en la rama correcta con ese evento en on:?
-         |
-    NO --+-- SÍ
-    |         |
-    v         v
-No hay   ¿Coinciden los filtros
-ejecución  branches/tags/paths?
-              |
-         NO --+-- SÍ
-         |         |
-         v         v
-     No hay   ¿El workflow está
-     ejecución  habilitado en el repo?
-                   |
-              NO --+-- SÍ
-              |         |
-              v         v
-          No hay   Se crea workflow run
-          ejecución  con estado "queued"
-                         |
-                         v
-                  Los jobs se encolan
-                  según disponibilidad
-                  de runners
-```
+*Árbol de decisión que GitHub evalúa al recibir un evento — tres filtros deben pasar antes de crear un run.*
 
 Este flujo explica por qué la ausencia de ejecuciones puede deberse a múltiples causas distintas y por qué el diagnóstico requiere verificar cada nivel por separado.
 
@@ -289,16 +282,21 @@ La vista de grafo (graph view) es la representación visual principal de un work
 
 En el workflow del ejemplo anterior, el grafo tendría esta forma:
 
+```mermaid
+flowchart TD
+    L["lint"] --> U["unit-tests"]
+    U --> I["integration-tests\n(if: workflow_dispatch &&\nrun_integration_tests == 'true')"]
+    U --> B["build"]
+
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+
+    class L,U primary
+    class I warning
+    class B secondary
 ```
-[lint]
-   |
-   v
-[unit-tests]
-   |
-   +--------+
-   v        v
-[integration-tests]  [build]
-```
+*Grafo de dependencias: integration-tests y build se ejecutan en paralelo tras unit-tests; integration-tests solo con dispatch manual.*
 
 Los nodos se organizan en columnas verticales según el nivel de dependencia: jobs sin `needs` en la primera columna, jobs que dependen de ellos en la segunda, y así sucesivamente. Los jobs que están al mismo nivel y no tienen dependencia entre sí aparecen en paralelo en la misma columna.
 
@@ -422,15 +420,28 @@ Un check run es una unidad de verificación asociada a un commit específico. Ca
 
 La relación jerárquica es:
 
+```mermaid
+flowchart LR
+    WR["Workflow Run\n(1 ejecución)"]
+    subgraph "Jobs → Check Runs"
+        direction LR
+        J1["Job: lint"] --> CR1[("Check Run\nBuild and Test / lint")]
+        J2["Job: unit-tests"] --> CR2[("Check Run\nBuild and Test / unit-tests")]
+        J3["Job: build"] --> CR3[("Check Run\nBuild and Test / build")]
+    end
+    WR --> J1
+    WR --> J2
+    WR --> J3
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef storage fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class WR root
+    class J1,J2,J3 primary
+    class CR1,CR2,CR3 storage
 ```
-Workflow Run (1)
-   |
-   +-- Job "lint"         --> Check Run (con nombre "Build and Test / lint")
-   |
-   +-- Job "unit-tests"   --> Check Run (con nombre "Build and Test / unit-tests")
-   |
-   +-- Job "build"        --> Check Run (con nombre "Build and Test / build")
-```
+*Cada job genera un check run independiente — los PR checks referencian nombres de jobs, no del workflow completo.*
 
 El nombre de cada check run se compone del nombre del workflow (campo `name:`) seguido del nombre del job. Las branch protection rules hacen referencia a estos nombres de check run, no al nombre del workflow run completo. Por eso, si se cambia el nombre del workflow o el nombre de un job, hay que actualizar también la branch protection rule correspondiente.
 

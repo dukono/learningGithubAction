@@ -24,6 +24,41 @@ workflow.yml
 └── jobs *                 # Definición de los jobs (mínimo uno)
 ```
 
+```mermaid
+graph TD
+    ROOT["workflow.yml"]
+
+    ROOT --> ON["on (obligatorio)"]
+    ROOT --> JOBS["jobs (obligatorio)"]
+    ROOT --> NAME["name"]
+    ROOT --> ENV["env"]
+    ROOT --> DEFAULTS["defaults"]
+    ROOT --> CONCURRENCY["concurrency"]
+    ROOT --> PERMISSIONS["permissions"]
+
+    ON --> ON1["push"]
+    ON --> ON2["pull_request"]
+    ON --> ON3["workflow_dispatch"]
+    ON --> ON4["schedule"]
+
+    DEFAULTS --> RUN["run"]
+    RUN --> RUN1["shell"]
+    RUN --> RUN2["working-directory"]
+
+    CONCURRENCY --> C1["group"]
+    CONCURRENCY --> C2["cancel-in-progress"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef neutral fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class ROOT root
+    class ON,JOBS danger
+    class NAME,ENV,DEFAULTS,CONCURRENCY,PERMISSIONS primary
+    class ON1,ON2,ON3,ON4,RUN,RUN1,RUN2,C1,C2 neutral
+```
+
 ## La propiedad `name`
 
 La propiedad `name` asigna el título que aparece en la pestaña Actions del repositorio y en las notificaciones por correo. Es opcional: si se omite, GitHub muestra la ruta relativa del fichero (por ejemplo `CI / .github/workflows/ci.yml`). Conviene ponerla siempre porque facilita identificar el workflow en repositorios con muchos ficheros. El valor es una cadena de texto plano; puede contener expresiones `${{ }}` aunque en la práctica raramente se usan aquí porque el contexto `github` aún no tiene valores de ejecución en el momento en que se muestra el nombre en la lista de workflows.

@@ -32,6 +32,36 @@ Un workflow command es una línea escrita en stdout con el formato `::nombre-com
 
 > [CONCEPTO] Los workflow commands funcionan en cualquier step con `run:`, no solo dentro de actions. La diferencia es que `$GITHUB_OUTPUT`, `$GITHUB_ENV` y similares son file commands (escriben en ficheros especiales del runner) mientras que `::error::`, `::group::` etc. son inline commands (se escriben directamente en stdout).
 
+```mermaid
+flowchart LR
+    STEP["Step (run:)"]
+
+    subgraph FILE ["File commands — persist entre steps"]
+        GOUT["$GITHUB_OUTPUT\noutputs del step"]
+        GENV["$GITHUB_ENV\nvars del job"]
+        GPATH["$GITHUB_PATH\nPATH del job"]
+        GSUM["$GITHUB_STEP_SUMMARY\nMarkdown resumen"]
+    end
+
+    subgraph INLINE ["Inline commands — procesados al instante en stdout"]
+        MASK["::add-mask::\nenmascara valor"]
+        ANN["::error:: ::warning::\n::notice:: ::debug::\nanotaciones"]
+        GRP["::group:: ::endgroup::\ncollapse logs"]
+    end
+
+    STEP -->|"echo key=val >>"| FILE
+    STEP -->|"echo ::cmd:: >stdout"| INLINE
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef storage fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class STEP root
+    class GOUT,GENV,GPATH,GSUM primary
+    class MASK,ANN,GRP storage
+```
+*File commands persisten en ficheros del runner y son legibles por steps siguientes; inline commands son interceptados por el runner al leer stdout.*
+
 ## GITHUB_OUTPUT
 
 `GITHUB_OUTPUT` reemplaza al comando `::set-output::` deprecado. Para producir un output desde un step, se escribe `clave=valor` en el fichero apuntado por la variable de entorno `$GITHUB_OUTPUT`. El runner lee ese fichero al finalizar el step y expone el valor como `steps.<id>.outputs.clave`.

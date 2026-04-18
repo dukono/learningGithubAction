@@ -17,6 +17,39 @@ Cuando se escribe `run: echo "${{ github.event.issue.title }}"`, GitHub sustituy
 | `run: echo '${{ ... }}'` (comillas simples) | No | La interpolación ocurre antes del shell |
 | Usar `jq` para parsear JSON sin shell expansion | Sí | jq no ejecuta el contenido como comandos |
 
+```mermaid
+flowchart LR
+    subgraph unsafe ["Patrón INSEGURO"]
+        direction LR
+        A[/Valor\nexterno/] --> B["run: echo\n\${{ ctx.value }}"]
+        B --> C["Bash recibe\ncomandos\nexpandidos"]
+        C --> D["Ejecución\narbitraria"]
+    end
+
+    subgraph safe ["Patrón SEGURO"]
+        direction LR
+        E[/Valor\nexterno/] --> F["env: VAR:\n\${{ ctx.value }}"]
+        F --> G["run: echo\n\"$VAR\""]
+        G --> H["Bash lee VAR\ncomo string\nliteral"]
+        H --> I["Ejecución\nsegura"]
+    end
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class A,E neutral
+    class B warning
+    class C,D danger
+    class F,G primary
+    class H,I secondary
+```
+
+*La variable de entorno actúa como barrera: el valor no se interpola directamente en el script de bash.*
+
 ## Mitigación principal: variable de entorno intermediaria
 
 La defensa más directa es separar la interpolación de la ejecución. En lugar de incrustar la expresión `${{ }}` dentro del comando shell, se asigna el valor a una variable de entorno y el comando usa esa variable.

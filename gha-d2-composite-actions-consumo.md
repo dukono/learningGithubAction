@@ -14,6 +14,25 @@ La regla práctica es: usa una composite action cuando quieras encapsular **paso
 
 Una composite action es la elección correcta cuando los pasos deben compartir variables de entorno, artefactos montados en el runner, o herramientas ya instaladas en el sistema. En cambio, si necesitas un runner con una configuración distinta o un contexto de permisos diferente para esa lógica, el reusable workflow es más adecuado.
 
+```mermaid
+flowchart TD
+    Q{{"¿Qué necesitas reutilizar?"}}
+    Q -->|"Pasos dentro\nde un job"| CA["Composite action\n(runs.using: composite)"]
+    Q -->|"Job completo\ncon runner propio"| RW["Reusable workflow\n(workflow_call)"]
+    Q -->|"Punto de partida\npara nuevos repos"| SW["Starter workflow\n(workflow-templates/)"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class Q root
+    class CA primary
+    class RW secondary
+    class SW warning
+```
+*Criterio de elección entre los tres patrones de reutilización de GitHub Actions.*
+
 ## Definición: action.yml con runs.using: composite
 
 Una composite action se define en un fichero `action.yml` (o `action.yaml`) ubicado en la raíz de un repositorio o en cualquier subdirectorio. El campo que la distingue de otros tipos de action es `runs.using: composite`.

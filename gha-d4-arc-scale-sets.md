@@ -26,6 +26,26 @@ ARC ha evolucionado desde su modelo original hacia el modelo de **runner scale s
 
 La instalación de ARC con el modelo de scale sets requiere dos charts de Helm: primero el controlador (una sola vez por clúster) y luego uno o más scale sets (uno por configuración de runner que se necesite).
 
+```mermaid
+sequenceDiagram
+    participant GH as GitHub API
+    participant CTRL as ARC Controller\n(gha-runner-scale-set-controller)
+    participant SS as AutoscalingRunnerSet
+    participant POD as Runner Pod
+
+    GH->>CTRL: Job encolado para runnerScaleSetName
+    CTRL->>SS: Aumentar réplicas según demanda
+    SS->>POD: Crear pod runner
+    POD->>GH: Registrar runner (GitHub App token)
+    GH->>POD: Asignar job directamente (push-based)
+    POD->>POD: Ejecutar job
+    POD->>GH: Reportar resultado
+    POD->>SS: Pod terminado (ephemeral por diseño)
+    SS->>CTRL: Escalar a cero si no hay más jobs
+```
+
+*Flujo de ARC con scale sets: GitHub asigna jobs directamente a los pods (push-based), que se crean y destruyen por cada job.*
+
 Los prerrequisitos son un clúster Kubernetes (1.25+), Helm 3+ instalado y acceso a la API de GitHub mediante GitHub App o PAT.
 
 ```bash
@@ -170,6 +190,30 @@ jobs:
 ## ARC vs. self-hosted runner manual
 
 La diferencia fundamental entre ARC y los self-hosted runners registrados manualmente es que ARC gestiona el ciclo de vida completo de los runners de forma automática y elástica. La tabla siguiente compara los dos enfoques para ayudar a decidir cuándo usar cada uno.
+
+```mermaid
+flowchart LR
+    subgraph MANUAL[Self-hosted runner manual]
+        direction TB
+        M1[Máquina siempre encendida]:::warning
+        M2[Registro manual]:::warning
+        M3[Actualizaciones manuales del SO]:::warning
+        M4[No ephemeral por defecto]:::warning
+        M5[Complejidad inicial baja]:::secondary
+    end
+
+    subgraph ARC[ARC con scale sets]
+        direction TB
+        A1[Pods bajo demanda\n0 a N]:::secondary
+        A2[Helm install/upgrade]:::secondary
+        A3[Imagen gestionada por GitHub]:::secondary
+        A4[Ephemeral por diseño]:::secondary
+        A5[Requiere Kubernetes]:::warning
+    end
+
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+```
 
 | Aspecto | Self-hosted runner manual | ARC con scale sets |
 |---------|--------------------------|-------------------|

@@ -20,6 +20,31 @@ El concepto A7.2 es uno de los más evaluados en el examen. Por defecto, `fail-f
 
 > [EXAMEN] Con `fail-fast: true` (por defecto), los jobs cancelados aparecen en la UI como `cancelled`, NO como `failed`. Esto confunde en preguntas donde se pregunta cuántos jobs fallaron vs. cuántos fueron cancelados.
 
+```mermaid
+flowchart TD
+    RUN(("Matrix ejecutando")) --> FAIL["Una combinación\nfalla"]
+    FAIL --> FF{{"¿fail-fast: true?"}}
+    FF -->|sí| CANCEL["Resto de combinaciones\n→ cancelled en UI"]
+    FF -->|no| CONT["Resto continúan\nhasta completarse"]
+    CANCEL --> RESULT1["UI: 1 failure\nN-1 cancelled"]
+    CONT --> RESULT2["UI: resultado real\nde cada combinación"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class RUN root
+    class FAIL danger
+    class FF warning
+    class CANCEL danger
+    class CONT secondary
+    class RESULT1 neutral
+    class RESULT2 secondary
+```
+*Con fail-fast: true solo hay 1 failure real — el resto aparece como cancelled, no como failed.*
+
 ## max-parallel: controlar el paralelismo visible en la UI
 
 El parámetro `max-parallel` (A7.3) limita cuántas combinaciones de la matrix se ejecutan simultáneamente. Sin él, GitHub ejecuta todas las combinaciones en paralelo (hasta los límites de runners disponibles). Al establecer `max-parallel: 2`, en la vista de ejecución solo verás 2 jobs en estado `in_progress` al mismo tiempo; el resto permanecerán en `queued` hasta que uno de los activos finalice. Esto es útil para controlar el consumo de minutos o cuando hay recursos compartidos.

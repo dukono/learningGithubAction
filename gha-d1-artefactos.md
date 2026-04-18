@@ -8,22 +8,25 @@
 
 Los artefactos son archivos o directorios generados durante la ejecución de un workflow que GitHub Actions persiste fuera del ciclo de vida efímero del runner. A diferencia de la caché, que está diseñada para acelerar ejecuciones futuras, los artefactos sirven para dos propósitos principales: compartir archivos entre jobs del mismo workflow y preservar resultados (binarios compilados, reportes, logs) para consulta posterior desde la UI o la API REST. Cada job corre en un runner limpio, por lo que sin artefactos los archivos generados en un job desaparecen antes de que el siguiente job empiece.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        WORKFLOW RUN                         │
-│                                                             │
-│  ┌──────────────┐    sube artefacto    ┌────────────────┐  │
-│  │  job: build  │ ──────────────────►  │  GitHub Store  │  │
-│  │              │                      │  "my-app-dist" │  │
-│  │ ./dist/*.js  │                      └───────┬────────┘  │
-│  └──────────────┘                              │           │
-│                                       descarga artefacto   │
-│                                                │           │
-│                                       ┌────────▼────────┐  │
-│                                       │  job: deploy    │  │
-│                                       │  needs: build   │  │
-│                                       └─────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph WR["WORKFLOW RUN"]
+        direction LR
+        B["job: build\n./dist/*.js"]
+        GS[("GitHub Store\n'my-app-dist'")]
+        D["job: deploy\nneeds: build"]
+
+        B -->|"sube artefacto"| GS
+        GS -->|"descarga artefacto"| D
+    end
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef storage   fill:#6e40c9,color:#fff,stroke:#5a32a3
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+
+    class B primary
+    class GS storage
+    class D secondary
 ```
 
 ---
@@ -70,11 +73,45 @@ Para que un job acceda a los archivos producidos por otro job dentro del mismo w
 
 GitHub almacena los artefactos durante un período de retención configurable a tres niveles: organización, repositorio y artefacto individual. El valor predeterminado es **90 días** para repositorios con plan gratuito y de pago, aunque los administradores de organización pueden cambiarlo. El mínimo absoluto es **1 día** y el máximo es **400 días**; valores fuera de ese rango son rechazados por la API con error de validación. El parámetro `retention-days` en `upload-artifact` solo puede reducir el período respecto al configurado en el repositorio, no aumentarlo más allá del límite institucional. Una vez expirado el período, los artefactos se eliminan automáticamente y no son recuperables. Para artefactos de releases o builds de producción que deben conservarse indefinidamente conviene adjuntarlos como assets a un GitHub Release en lugar de depender de la retención de workflow.
 
+```mermaid
+timeline
+    title Niveles de configuración de retención
+    section Organización
+        Límite institucional máximo : configurado por admins de org
+    section Repositorio
+        Default del repositorio : ajustable hasta límite de org
+    section Artefacto individual
+        retention-days en upload-artifact : 1–400 días
+        Solo puede reducir el default : nunca superar el límite de repo
+```
+
 ---
 
 ## `if-no-files-found`
 
 El parámetro `if-no-files-found` de `upload-artifact` determina el comportamiento cuando el `path` especificado no resuelve a ningún archivo. Con el valor `warn` (predeterminado) el step termina con éxito pero emite una advertencia visible en los logs; es útil cuando el artefacto es opcional, por ejemplo reportes de cobertura que solo se generan si los tests pasan. Con el valor `error` el step falla, lo que provoca el fallo del job completo; es la opción correcta cuando el artefacto es indispensable para jobs posteriores o para la auditoría del build. Con el valor `ignore` el step termina silenciosamente sin advertencia ni error; se reserva para artefactos completamente opcionales en pipelines donde cualquier ruido en los logs es problemático. La elección incorrecta del valor puede ocultar fallos de build o generar falsos negativos difíciles de diagnosticar.
+
+```mermaid
+flowchart TD
+    UP{{"path no coincide\nningún archivo"}}
+    W["warn\nstep: éxito + advertencia en logs"]
+    E["error\nstep: fallo → job falla"]
+    I["ignore\nstep: éxito silencioso"]
+
+    UP -->|"if-no-files-found: warn"| W
+    UP -->|"if-no-files-found: error"| E
+    UP -->|"if-no-files-found: ignore"| I
+
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+
+    class UP warning
+    class E danger
+    class W neutral
+    class I secondary
+```
 
 ---
 
@@ -167,6 +204,44 @@ jobs:
 ## Artefactos en workflows con matrix
 
 Cuando un workflow usa una estrategia `matrix`, cada combinación de la matriz corre en un job independiente y genera su propio conjunto de archivos. Si todos los jobs de la matriz intentan subir un artefacto con el mismo `name`, en `actions/upload-artifact@v4` los archivos se combinan en un único artefacto (comportamiento merge), mientras que en v3 el segundo upload sobreescribe al primero. La solución recomendada es incluir la variable de la matriz en el nombre del artefacto para garantizar unicidad: `name: test-results-${{ matrix.os }}-${{ matrix.node-version }}`. Cuando el job de consolidación necesita descargar todos los artefactos de la matriz, puede omitir el parámetro `name` en `download-artifact` para obtenerlos todos en subdirectorios separados.
+
+```mermaid
+flowchart LR
+    subgraph MJ["matrix jobs (4 combinaciones)"]
+        direction TB
+        J1["test\nubuntu / node 18"]
+        J2["test\nubuntu / node 20"]
+        J3["test\nwindows / node 18"]
+        J4["test\nwindows / node 20"]
+    end
+
+    subgraph GS["GitHub Store"]
+        direction TB
+        A1[("test-results\nubuntu-node18")]
+        A2[("test-results\nubuntu-node20")]
+        A3[("test-results\nwindows-node18")]
+        A4[("test-results\nwindows-node20")]
+    end
+
+    R["report\ndownload all → all-results/"]
+
+    J1 --> A1
+    J2 --> A2
+    J3 --> A3
+    J4 --> A4
+    A1 --> R
+    A2 --> R
+    A3 --> R
+    A4 --> R
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef storage   fill:#6e40c9,color:#fff,stroke:#5a32a3
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+
+    class J1,J2,J3,J4 primary
+    class A1,A2,A3,A4 storage
+    class R secondary
+```
 
 ```yaml
 jobs:

@@ -25,6 +25,33 @@ Después: `uses: actions/checkout@<nuevo-sha> # v4.3.0`
 
 Si la referencia original era un tag sin SHA (por ejemplo `@v4`), Dependabot puede proponer actualizarla a un SHA. Este comportamiento es uno de los argumentos para adoptar SHA pins desde el inicio: Dependabot los mantiene actualizados sin esfuerzo manual.
 
+```mermaid
+flowchart LR
+    A(["Nueva versión\nde action\ndisponible"]) --> B["Dependabot\ndetecta cambio\nsegún schedule"]
+    B --> C["Obtiene SHA\ndel nuevo commit\n(v4.3.0 → new SHA)"]
+    C --> D["Crea PR:\nactualiza SHA\n+ actualiza comentario"]
+    D --> E{{"Revisor\naprueba PR?"}}
+    E -->|"Sí"| F["Merge:\nworkflow usa\nnuevo SHA # v4.3.0"]
+    E -->|"No / cambios"| G["PR rechazado\nSHA anterior\nse mantiene"]
+    F --> H(["SHA pin\nactualizado\ny documentado"])
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class A neutral
+    class B,C primary
+    class D primary
+    class E warning
+    class F,H secondary
+    class G neutral
+```
+
+*Ciclo de actualización de SHA pins con Dependabot: la revisión humana del PR es el punto de control antes de que el nuevo SHA entre en producción.*
+
 ## Actualización Manual de SHA Pins
 
 Cuando no se tiene Dependabot configurado o se necesita actualizar un SHA específico fuera del ciclo automático, el proceso manual es el siguiente. Primero, identificar la nueva versión de la action. Segundo, obtener el SHA del commit correspondiente con `gh api` o `git ls-remote`. Tercero, actualizar la línea `uses:` en el workflow con el nuevo SHA y el comentario del tag actualizado.

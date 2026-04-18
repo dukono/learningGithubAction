@@ -105,6 +105,38 @@ La siguiente tabla resume las diferencias clave:
 
 > **Regla práctica para el examen:** Si necesitas parar un workflow temporalmente sin perder nada, **deshabilítalo**. Si el workflow ya no tiene utilidad y quieres limpiar el repositorio, **elimina el fichero**. En ambos casos, el historial de ejecuciones previas **permanece** en la UI de Actions.
 
+```mermaid
+stateDiagram-v2
+    [*] --> Activo : commit de workflow.yml
+    Activo --> Deshabilitado : PUT .../disable (UI o API)
+    Deshabilitado --> Activo : PUT .../enable
+    Activo --> Eliminado : git rm + push
+
+    state Activo {
+        note right of Activo
+            state en API: active
+            responde a eventos
+            dispatch disponible
+        end note
+    }
+    state Deshabilitado {
+        note right of Deshabilitado
+            state en API: disabled_manually
+            no responde a eventos
+            dispatch devuelve 422
+        end note
+    }
+    state Eliminado {
+        note right of Eliminado
+            fichero borrado del repo
+            historial permanece 90 días
+            no aparece en lista de workflows
+        end note
+    }
+    Eliminado --> [*]
+```
+*Ciclo de vida de un workflow: deshabilitar es reversible; eliminar el fichero es permanente pero no borra el historial.*
+
 ---
 
 ## A11.5 Eliminar un fichero de workflow del repositorio

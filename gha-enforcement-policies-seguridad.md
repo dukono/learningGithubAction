@@ -30,6 +30,38 @@ La política se aplica en cascada: la organización puede permitir que los repos
 
 Para workflows reutilizables existe una opción adicional: **Allow workflows created by [organization]**, que permite que repositorios de la organización llamen a workflows de otros repositorios de la misma organización sin necesidad de listarlos explícitamente.
 
+```mermaid
+flowchart TD
+    OrgPolicy["Org Policy\nAllow select actions\n(lista: actions/*, aws-actions/*)"]
+    OrgPolicy --> RepoA["Repo A\nHereda org policy\n(no puede ampliar)"]
+    OrgPolicy --> RepoB["Repo B\nRestringe aún más:\nsolo actions/*"]
+
+    RepoA --> BranchProt["Branch Protection\nRequired status checks\nRequire CODEOWNERS review"]
+    RepoB --> BranchProt
+
+    BranchProt --> PR["Pull Request\na main"]
+    PR --> Gate{{"¿Security Gate\njob pasa?"}}
+    Gate -->|"Sí + CODEOWNERS\naprueban"| Merge["Merge permitido"]
+    Gate -->|"No"| Block["Merge bloqueado"]
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class OrgPolicy root
+    class RepoA,RepoB neutral
+    class BranchProt primary
+    class PR neutral
+    class Gate warning
+    class Merge secondary
+    class Block danger
+```
+
+*Cascada de enforcement: la política de organización es el techo máximo; branch protection y required status checks controlan el flujo de merge.*
+
 ## Required Status Checks como mecanismo de enforcement
 
 Los required status checks son la herramienta principal para bloquear el merge de pull requests hasta que determinados workflows pasen. Se configuran en la branch protection rule de la rama objetivo (normalmente `main` o `release/*`).

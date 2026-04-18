@@ -31,6 +31,39 @@ La función `success()` representa el comportamiento por defecto de cualquier st
 
 La función `failure()` retorna `true` cuando al menos un step anterior en el job falló, o cuando al menos un job del que depende (`needs`) falló. Se usa para ejecutar pasos de limpieza, enviar alertas o registrar diagnósticos solo cuando algo salió mal. Es importante distinguirla de `!success()`: mientras que `failure()` retorna `false` si el workflow fue cancelado, `!success()` retornaría `true` en ese escenario (porque `success()` sería `false`). Usar `failure()` es más preciso cuando solo se quiere reaccionar a errores reales, no a cancelaciones.
 
+```mermaid
+flowchart LR
+    subgraph EST["Estado del job/step anterior"]
+        S1["éxito"]
+        S2["fallo"]
+        S3["cancelado"]
+    end
+
+    subgraph FA["failure()"]
+        F1["false"]
+        F2["true"]
+        F3["false"]
+    end
+
+    subgraph NS["!success()"]
+        N1["false"]
+        N2["true"]
+        N3["true ⚠️"]
+    end
+
+    S1 --> F1 & N1
+    S2 --> F2 & N2
+    S3 --> F3 & N3
+
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class F1,F3,N1 secondary
+    class F2,N2 danger
+    class N3 warning
+```
+
 ```yaml
 - name: Notificar fallo en Slack
   if: failure()
@@ -229,6 +262,22 @@ jobs:
 | NOT | `!` | Invierte el resultado booleano |
 | Igual | `==` | Comparación insensible a mayúsculas para strings |
 | Distinto | `!=` | Niega la igualdad |
+
+```mermaid
+stateDiagram-v2
+    [*] --> En_ejecucion
+
+    En_ejecucion --> Exitoso : todos los steps OK
+    En_ejecucion --> Fallido : algún step falla
+    En_ejecucion --> Cancelado : timeout o cancelación manual
+
+    Exitoso --> [*] : success()
+    Fallido --> [*] : failure()
+    Cancelado --> [*] : cancelled()
+    Exitoso --> [*] : always()
+    Fallido --> [*] : always()
+    Cancelado --> [*] : always()
+```
 
 ---
 

@@ -8,19 +8,37 @@ Un step es la unidad atómica de trabajo dentro de un job. Cada step se ejecuta 
 
 Las propiedades disponibles para un step se organizan en dos grupos principales: las que determinan qué ejecuta el step (`uses` o `run`) y las que modifican su comportamiento (`name`, `id`, `if`, `env`, `with`, `continue-on-error`, `timeout-minutes`, `shell`, `working-directory`).
 
-```
-step
-├── name                  # Etiqueta visible en los logs de la UI
-├── id                    # Identificador para referenciar outputs/outcome
-├── if                    # Condición de ejecución
-├── uses                  # Referenciar una action externa o reutilizable
-│   └── with              # Inputs de la action (solo con uses)
-├── run                   # Comandos shell directos (alternativa a uses)
-│   ├── shell             # Intérprete a usar (solo con run)
-│   └── working-directory # Directorio de trabajo (solo con run)
-├── env                   # Variables de entorno a nivel de step
-├── continue-on-error     # Continuar el job si este step falla
-└── timeout-minutes       # Tiempo máximo de ejecución del step
+```mermaid
+graph TD
+    STEP["step"]
+
+    STEP --> NAME["name (opcional)"]
+    STEP --> ID["id (opcional)"]
+    STEP --> IF["if (condicional)"]
+    STEP --> ENV["env"]
+    STEP --> TIMEOUT["timeout-minutes"]
+    STEP --> CONTINUE["continue-on-error"]
+
+    STEP --> USES["uses\naction externa"]
+    STEP --> RUN["run\ncomando shell"]
+
+    USES -->|"exclusivo con run"| WITH["with\nentradas de la action"]
+    RUN -->|"exclusivo con uses"| SHELL["shell"]
+    RUN --> WORKDIR["working-directory"]
+
+    MUTUAL["uses y run son\nmutuamente excluyentes"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+
+    class STEP root
+    class USES,RUN primary
+    class WITH,SHELL,WORKDIR secondary
+    class NAME,ID,IF,ENV,TIMEOUT,CONTINUE neutral
+    class MUTUAL danger
 ```
 
 ## La propiedad `uses`
@@ -459,23 +477,28 @@ steps:
 
 El siguiente esquema resume los casos de uso típicos para decidir qué propiedad aplicar en cada situación.
 
-```
-¿Qué quiero ejecutar?
-├── Una action de GitHub Marketplace o reutilizable → uses: owner/repo@ref
-│   └── ¿La action necesita inputs? → with: { input: value }
-└── Comandos de shell propios → run: |
-    ├── ¿Necesito un intérprete distinto de bash? → shell: python / pwsh / cmd
-    └── ¿Estoy en un monorepo? → working-directory: ./subpackage
-
-¿Cómo identifico/controlo el step?
-├── ¿Necesito referenciar su resultado o outputs? → id: mi-step
-├── ¿Debe ejecutarse condicionalmente? → if: <expresión>
-├── ¿Qué aparece en los logs? → name: Descripción clara
-└── ¿Necesito variables de entorno específicas? → env: { VAR: value }
-
-¿Cómo manejo fallos y tiempo?
-├── ¿El job debe continuar si falla? → continue-on-error: true
-└── ¿Puede bloquearse indefinidamente? → timeout-minutes: N
+```mermaid
+mindmap
+  root((step))
+    Qué ejecutar
+      action marketplace
+        uses: owner/repo@ref
+        inputs necesarios
+          with: input: value
+      comandos propios
+        run: |
+        otro intérprete
+          shell: python/pwsh/cmd
+        monorepo
+          working-directory: ./sub
+    Identificar y controlar
+      id: mi-step
+      if: expresión
+      name: Descripción
+      env: VAR: value
+    Fallos y tiempo
+      continue-on-error: true
+      timeout-minutes: N
 ```
 
 ## Relación entre `uses` y el archivo `action.yml`
@@ -503,6 +526,33 @@ inputs:
 ## Flujo de evaluación de un step
 
 GitHub Actions evalúa las propiedades de cada step en un orden definido. Primero resuelve las expresiones en `if` para decidir si el step se ejecuta. Si `if` es falso, el step se marca como `skipped` y se pasa al siguiente. Si `if` es verdadero, se resuelven las expresiones en `env` y `with`, se establece el `working-directory` si se especificó, y se inicia la ejecución del comando `run` o de la action `uses` con el `shell` indicado. El `timeout-minutes` comienza a contar desde el inicio de la ejecución. Si el step termina antes del timeout, se registra su `outcome`. Si `continue-on-error` está activo y el step falló, `conclusion` se establece como `success` para que el job continúe.
+
+```mermaid
+flowchart TD
+    S([step]) --> IF{"if:\nevaluar expresión"}
+    IF -->|"false"| SKIP(["skipped"])
+    IF -->|"true / ausente"| RES["resolver env: y with:"]
+    RES --> WD["aplicar working-directory"]
+    WD --> EXEC["ejecutar run: / uses:\n+ shell:"]
+    EXEC --> TM{"timeout-minutes\nagotado?"}
+    TM -->|"sí"| TO(["outcome: failure\ntimeout"])
+    TM -->|"no"| OUT["registrar outcome"]
+    OUT --> COE{"continue-on-error: true\ny outcome == failure?"}
+    COE -->|"sí"| CS(["outcome: failure\nconclusion: success"])
+    COE -->|"no"| CN(["conclusion = outcome"])
+
+    classDef root     fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary  fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger   fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning  fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class S root
+    class IF,TM,COE primary
+    class CS,CN secondary
+    class SKIP,TO danger
+    class RES,WD,EXEC,OUT warning
+```
 
 ---
 

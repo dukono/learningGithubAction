@@ -14,6 +14,28 @@ GitHub ofrece dos modos globales para los permisos del `GITHUB_TOKEN`, configura
 
 La regla de override entre org y repositorio es estricta: un repositorio puede igualar o endurecer la política de la organización, pero **nunca puede ser más permisivo**. Si la org está en modo restricted, un administrador de repositorio no puede cambiar ese repositorio a modo permissive.
 
+```mermaid
+flowchart TD
+    ORG{Política org} -- Permissive --> P1[Token: read+write\npor defecto en\nla mayoría de scopes]:::warning
+    ORG -- Restricted --> P2[Token: read-only\npor defecto\nen todos los scopes]:::secondary
+    P1 --> WF1{workflow\ndeclara permissions?}
+    P2 --> WF2{workflow\ndeclara permissions?}
+    WF1 -- No --> T1(Permisos amplios\nread+write heredados):::warning
+    WF1 -- Sí --> T2(Se aplica lo declarado\nhasta el máximo de la org):::primary
+    WF2 -- No --> T3(Solo lectura\nen todos los scopes):::secondary
+    WF2 -- Sí --> T4(Se amplían solo los\nscopes declarados):::primary
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class ORG neutral
+    class WF1,WF2 neutral
+```
+
+*La declaración `permissions:` en el workflow interactúa con la política de la org: la política establece el techo, el workflow puede moverse dentro de ese techo.*
+
 > **Trampa de examen:** la política de token a nivel org no sobreescribe la declaración `permissions:` en el workflow. Lo que aplica es el **mínimo** entre la política org/repo y lo declarado en el workflow. Si la org está en modo restricted (read-only) y el workflow declara `contents: write`, el token efectivamente recibe `contents: write` porque el workflow lo ha solicitado explícitamente. Si el workflow no declara nada y la política org es permissive, el token recibe los permisos amplios por defecto. El workflow puede siempre reducir permisos; la política org establece el techo máximo permitido.
 
 ## Retención de artefactos y logs

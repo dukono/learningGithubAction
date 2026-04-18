@@ -10,20 +10,32 @@ Publicar una action en el Marketplace y gestionar su ciclo de vida con una estra
 
 El siguiente diagrama muestra el flujo desde el repositorio hasta el Marketplace y las actualizaciones:
 
+```mermaid
+flowchart TD
+    REPO["repo público\n+ action.yml con branding"]
+    REL1["Crear GitHub Release\n(tag v1.0.0)"]
+    MKT(("action visible en\nmarketplace.github.com"))
+    REL2["Nueva versión\n(tag v1.1.0)"]
+    UPD["Marketplace actualizado\nautomáticamente"]
+    FLT["git tag -fa v1\nfloating major tag actualizado"]
+
+    REPO --> REL1
+    REL1 -->|"Publish to Marketplace"| MKT
+    REL1 --> REL2
+    REL2 --> UPD
+    REL2 --> FLT
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef storage fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class REPO root
+    class REL1,REL2 primary
+    class MKT,UPD secondary
+    class FLT storage
 ```
-repo público + action.yml con branding
-        │
-        ▼
-  Crear GitHub Release (tag v1.0.0)
-        │
-        ├──► Opción "Publish to Marketplace" → action visible en marketplace.github.com
-        │
-        ▼
-  Nueva versión (v1.1.0)
-        │
-        ├──► Nuevo release → Marketplace se actualiza automáticamente
-        └──► git tag -fa v1 → floating major tag actualizado
-```
+*Primera publicación requiere marcar "Publish to Marketplace"; releases posteriores actualizan la entrada automáticamente.*
 
 ## Requisitos para publicar en el Marketplace
 
@@ -80,6 +92,36 @@ La estrategia immutable crea un tag único por cada release (`v1.0.0`, `v1.0.1`,
 ## Cuándo usar cada estrategia
 
 La elección entre floating y immutable depende del contrato con los consumidores: si la action es de uso amplio y se quiere que los usuarios reciban bugfixes automáticamente, floating major tag es la opción estándar (es la estrategia que usan `actions/checkout`, `actions/setup-node`, etc.). Si la action es crítica para infraestructura y se prefiere que ningún cambio ocurra sin aprobación explícita, immutable es la opción correcta.
+
+```mermaid
+flowchart LR
+    subgraph FLOAT ["Floating major tag"]
+        direction TB
+        F1["v1.0.0"]
+        F2["v1.1.0"]
+        F3["v1.2.0"]
+        FV1(["v1 → apunta\nal último"])
+        F1 --> F2 --> F3
+        F3 -. mueve .-> FV1
+    end
+
+    subgraph IMM ["Immutable"]
+        direction TB
+        I1["v1.0.0 (fijo)"]
+        I2["v1.1.0 (fijo)"]
+        I3["v1.2.0 (fijo)"]
+        I1 --> I2 --> I3
+    end
+
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef storage fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class F1,F2,F3 primary
+    class FV1 storage
+    class I1,I2,I3 secondary
+```
+*Floating: consumidores con `@v1` reciben bugfixes automáticamente. Immutable: cada adopción requiere cambio explícito en el workflow.*
 
 ## GitHub Releases vs. git tags
 

@@ -28,26 +28,20 @@ El callee, por su parte, debe declarar `on: workflow_call` para anunciar que ace
 
 El siguiente diagrama representa la relación entre los dos workflows durante la ejecución.
 
+```mermaid
+sequenceDiagram
+    participant CA as Caller workflow
+    participant CE as Callee workflow
+    participant R as Runner (callee)
+
+    CA->>CE: uses: org/repo/.github/workflows/file.yml@ref
+    Note over CA,CE: with: inputs (environment, run_tests…)<br/>secrets: deploy_key
+    CE->>R: lanza job build en runner propio
+    R-->>CE: steps.set-tag.outputs.tag → jobs.build.outputs.tag
+    CE-->>CA: on.workflow_call.outputs.image_tag
+    Note over CA: needs.invoke-build.outputs.image_tag disponible
 ```
-┌─────────────────────────────────────┐
-│           CALLER WORKFLOW           │
-│  on: push                           │
-│                                     │
-│  jobs:                              │
-│    build:                           │
-│      uses: org/repo/.github/...     │─── inputs ──────►┐
-│      with:                          │                   │
-│        environment: staging         │─── secrets ─────►│
-│      secrets:                       │                   ▼
-│        deploy_key: ${{ secrets.K }} │        ┌─────────────────────┐
-│                                     │        │   CALLEE WORKFLOW   │
-│    deploy:                          │        │  on: workflow_call  │
-│      needs: build                   │        │                     │
-│      steps:                         │        │  jobs:              │
-│        - run: echo ${{ needs.      ◄├─outputs│    build-step:      │
-│            build.outputs.image_tag }}│        │      runs-on: ...   │
-└─────────────────────────────────────┘        └─────────────────────┘
-```
+*Flujo de datos entre caller y callee: inputs y secrets van al callee; outputs regresar al caller en tres niveles.*
 
 El caller pasa datos hacia el callee mediante `with:` (inputs) y `secrets:`. El callee devuelve datos al caller mediante `outputs:` definidos a nivel de workflow.
 
@@ -192,6 +186,29 @@ jobs:
 Los outputs del callee se consumen en el caller exactamente igual que los outputs entre jobs normales: mediante la expresión `${{ needs.NOMBRE_DEL_JOB.outputs.CLAVE }}`. Para que funcione, el job del caller que consume el output debe declarar el job callee en su campo `needs:`.
 
 La cadena de propagación es siempre de tres niveles: el step escribe en `$GITHUB_OUTPUT`, el job lo eleva en su bloque `outputs:`, y el callee lo reexpone en `on.workflow_call.outputs`. Si se omite cualquiera de esos tres niveles, el valor no llegará al caller.
+
+```mermaid
+flowchart LR
+    S[("step\necho 'tag=...' >>\n$GITHUB_OUTPUT")]
+    J["job outputs:\n  tag: ${{ steps.set-tag.outputs.tag }}"]
+    WC["workflow_call outputs:\n  image_tag:\n    value: ${{ jobs.build.outputs.tag }}"]
+    CA["caller\n${{ needs.invoke-build.outputs.image_tag }}"]
+
+    S -->|"nivel 1"| J
+    J -->|"nivel 2"| WC
+    WC -->|"nivel 3"| CA
+
+    classDef storage fill:#6e40c9,color:#fff,stroke:#5a32a3
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+
+    class S storage
+    class J primary
+    class WC secondary
+    class CA root
+```
+*Cadena de tres niveles obligatoria — omitir cualquiera hace que el valor llegue vacío al caller.*
 
 Es importante recordar que los outputs del callee son siempre de tipo string. Aunque el input sea de tipo `number` o `boolean`, al exponerse como output se convierte en string y el caller debe tenerlo en cuenta.
 

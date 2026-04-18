@@ -19,6 +19,27 @@ GitHub permite tres formas distintas de referenciar una action en `uses:`. Cada 
 | Major tag flotante | `actions/checkout@v4` | Baja | Baja | Prototipado, desarrollo |
 | Rama | `actions/checkout@main` | Mínima | Mínima | Nunca en producción |
 
+```mermaid
+flowchart LR
+    SHA["@SHA40\nacci​ones/checkout@a81bbbf8..."]
+    TAG_S["@tag-específico\n@v4.1.0"]
+    TAG_F["@major-flotante\n@v4"]
+    BRANCH["@rama\n@main"]
+
+    SHA -->|"más seguro ←"| TAG_S -->|" "| TAG_F -->|"→ menos seguro"| BRANCH
+
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+
+    class SHA secondary
+    class TAG_S primary
+    class TAG_F warning
+    class BRANCH danger
+```
+*SHA40 es el único método verdaderamente inmutable — los tags pueden ser forzados; las ramas cambian en cada commit.*
+
 ## Referencia por SHA completo
 
 Referenciar una action por su SHA completo de 40 caracteres es el método de máxima seguridad. Un SHA identifica un commit específico e inmutable en Git: ningún actor externo puede modificar lo que ese commit contiene sin cambiar el SHA. Si el repositorio de la action es comprometido y el mantenedor reescribe un tag, el workflow con SHA sigue apuntando exactamente al mismo código que fue auditado.

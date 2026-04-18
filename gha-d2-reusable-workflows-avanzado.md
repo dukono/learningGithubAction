@@ -38,6 +38,29 @@ GitHub Actions permite que un reusable workflow llame a su vez a otro reusable w
 
 Si se supera ese límite, la ejecución falla en tiempo de validación con un error del tipo "Reusable workflows can only be nested to 4 levels deep". Este límite existe para evitar grafos de llamadas imposibles de rastrear y para proteger los recursos de la plataforma.
 
+```mermaid
+flowchart LR
+    L1["Nivel 1\nCaller\n(ci.yml)"]
+    L2["Nivel 2\nCallee\n(build.yml)"]
+    L3["Nivel 3\nCallee\n(test.yml)"]
+    L4["Nivel 4\nCallee\n(scan.yml)"]
+    L5[/"Nivel 5\nreport.yml\n✗ ERROR"/]
+
+    L1 -->|workflow_call| L2
+    L2 -->|workflow_call| L3
+    L3 -->|workflow_call| L4
+    L4 -. "falla validación" .-> L5
+
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+
+    class L1 primary
+    class L2,L3,L4 secondary
+    class L5 danger
+```
+*Límite de 4 niveles: el caller es nivel 1, quedan 3 niveles de callees anidados disponibles.*
+
 La implicación de diseño es clara: si una organización tiene pipelines muy profundos, alguna parte de la lógica tendrá que implementarse con composite actions (que no consumen niveles de anidamiento de reusable workflows) o bien refactorizarse para aplanar la jerarquía.
 
 > **Advertencia F6/exam trap:** El límite es 4 niveles, no 3. El caller ocupa el nivel 1, así que quedan 3 niveles de callees anidados. El examen puede formular la pregunta como "¿cuántos niveles de callees se pueden anidar?" y la respuesta correcta es 3 (dentro de un total de 4 contando el caller).

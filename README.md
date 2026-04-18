@@ -1,5 +1,6 @@
-# Índice — GitHub Actions: fundamentos y preparación para la certificación GH-200
 
+# Índice — GitHub Actions: fundamentos y preparación para la certificación GH-200
+## Fecha: 04-2026
 ## Mapa de módulos
 
 | Tema | Módulo | JSON |

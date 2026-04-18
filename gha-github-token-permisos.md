@@ -8,6 +8,30 @@
 
 GitHub Actions expone la clave `permissions:` para declarar qué puede hacer el `GITHUB_TOKEN` durante un run. Esta clave puede aparecer en dos lugares del fichero de workflow con distintos alcances: en la raíz del workflow (aplica a todos los jobs) y dentro de un job individual (sobreescribe la raíz solo para ese job). Declarar permisos explícitos es la práctica fundamental del principio de mínimo privilegio en GitHub Actions.
 
+```mermaid
+flowchart TD
+    OrgSetting["Org Setting\nRead-only / Read-write\n(default para todos los repos)"]
+    OrgSetting --> WorkflowRoot["permissions: toplevel\n(aplica a todos los jobs\nsi no declaran el suyo)"]
+    WorkflowRoot --> JobA["job A\n(hereda top-level)"]
+    WorkflowRoot --> JobB["job B\npermissions: {} → solo metadata:read\n(reemplaza, no suma)"]
+    WorkflowRoot --> JobC["job C\npermissions:\n  contents: read\n  id-token: write\n(reemplaza, no suma)"]
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class OrgSetting root
+    class WorkflowRoot primary
+    class JobA neutral
+    class JobB danger
+    class JobC secondary
+```
+
+*La declaración por job siempre reemplaza la del top-level: no hay fusión de permisos entre niveles.*
+
 ---
 
 ## Tabla de permisos disponibles

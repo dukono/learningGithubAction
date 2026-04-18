@@ -14,26 +14,40 @@ GitHub Actions expone información del entorno de ejecución a través de un sis
 
 El contexto `github` es el más rico de todos: contiene información sobre el evento que disparó el workflow, el repositorio, el commit y la ejecución actual.
 
-```
-github
-├── event_name        # Nombre del evento ("push", "pull_request", etc.)
-├── event             # Payload JSON completo del evento
-│   ├── action
-│   ├── ref
-│   └── ... (campos específicos del evento)
-├── ref               # Referencia completa: "refs/heads/main"
-├── ref_name          # Nombre corto de la ref: "main"
-├── sha               # SHA del commit que disparó el workflow
-├── actor             # Usuario o app que inició el workflow
-├── repository        # "owner/repo-name"
-├── workflow          # Nombre del workflow (campo "name:" del YAML)
-├── run_id            # ID numérico único de la ejecución
-├── run_number        # Número secuencial dentro del repo
-├── server_url        # "https://github.com"
-├── api_url           # "https://api.github.com"
-├── token             # Token GITHUB_TOKEN de la ejecución
-├── head_ref          # Branch de origen en pull_request
-└── base_ref          # Branch destino en pull_request
+```mermaid
+graph TD
+    ROOT["github"]
+
+    ROOT --> EVT["Evento"]
+    ROOT --> REPO["Repositorio"]
+    ROOT --> RUN["Ejecución"]
+    ROOT --> ACTOR["Actor"]
+
+    EVT --> E1["event_name"]
+    EVT --> E2["event"]
+    EVT --> E3["ref / ref_name / ref_type"]
+
+    REPO --> R1["repository"]
+    REPO --> R2["repository_owner"]
+    REPO --> R3["workspace"]
+
+    RUN --> RN1["run_id / run_number"]
+    RUN --> RN2["workflow / job"]
+    RUN --> RN3["sha / head_ref / base_ref"]
+    RUN --> RN4["server_url / api_url"]
+
+    ACTOR --> A1["actor"]
+    ACTOR --> A2["token"]
+    ACTOR --> A3["triggering_actor"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class ROOT root
+    class EVT,REPO,RUN,ACTOR primary
+    class E1,E2,E3,R1,R2,R3,RN1,RN2,RN3,RN4,A1,A2,A3 neutral
 ```
 
 **Campos de uso frecuente:**
@@ -130,6 +144,26 @@ steps:
 ```
 
 Las `vars` pueden definirse a tres niveles con orden de precedencia: organización → repositorio → entorno (environment). Si se define `DEPLOY_REGION` en la organización y también en el repositorio, el valor del repositorio tiene precedencia. Si el job especifica un `environment:`, las variables de ese entorno tienen la mayor precedencia.
+
+```mermaid
+flowchart LR
+    ORG["vars de\nOrganización\n(menor prec.)"]
+    REPO["vars de\nRepositorio"]
+    ENV["vars de\nEnvironment\n(mayor prec.)"]
+    JOB["${{ vars.NOMBRE }}\nen el job"]
+
+    ORG -->|"sobreescrita por"| REPO
+    REPO -->|"sobreescrita por"| ENV
+    ENV -->|"resuelve a"| JOB
+
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+
+    class ORG neutral
+    class REPO primary
+    class ENV,JOB secondary
+```
 
 A diferencia de `env` (que contiene variables del workflow YAML), `vars` contiene variables configuradas externamente en GitHub. Esto las hace ideales para valores que cambian entre repositorios o entornos sin modificar el código del workflow.
 

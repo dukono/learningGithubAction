@@ -12,15 +12,27 @@ Los inputs y outputs son la interfaz contractual entre una action y el workflow 
 
 El siguiente diagrama muestra cómo fluyen los datos en ambas direcciones:
 
+```mermaid
+flowchart LR
+    WF(("Workflow\n(job)"))
+    WITH["with:\n  input-a: valor\n  input-b: ${{ secrets.TOKEN }}"]
+    INP["${{ inputs.nombre }}\n(dentro de la action)"]
+    GOUT["GITHUB_OUTPUT\n(dentro de la action)"]
+    OUT["steps.id.outputs.key\n(steps posteriores)"]
+
+    WF -->|"pasa datos"| WITH --> INP
+    GOUT -->|"produce"| OUT --> WF
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef storage fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class WF root
+    class WITH,INP primary
+    class GOUT,OUT secondary
 ```
-Workflow (job)
-  │
-  ├─ with:                     ──► action recibe via ${{ inputs.nombre }}
-  │    input-a: "valor"
-  │    input-b: ${{ secrets.TOKEN }}
-  │
-  └─ steps.<id>.outputs.<key>  ◄── action produce via GITHUB_OUTPUT
-```
+*Los inputs fluyen del workflow hacia la action; los outputs fluyen de la action hacia steps posteriores del workflow.*
 
 ## Sintaxis `uses` para referenciar una action
 
@@ -87,6 +99,30 @@ Cuando un step `run:` usa directamente una expresión `${{ github.event.xxx }}`,
 ```
 
 > [CONCEPTO] La interpolación `${{ }}` ocurre ANTES de que el shell reciba el script. Si `github.event.pull_request.title` contiene `"; malicious-command;"`, ese comando se ejecuta. No es una vulnerabilidad de GitHub Actions en sí — es una consecuencia de cómo funciona la interpolación de plantillas.
+
+```mermaid
+flowchart TD
+    UNSAFE["run: echo ${{ github.event.pr.title }}\n⚠ interpolación directa"]
+    SAFE["env:\n  PR_TITLE: ${{ github.event.pr.title }}\nrun: echo $PR_TITLE\n✓ dato opaco"]
+    INTERP["GitHub sustituye ${{ }}\nANTES del shell"]
+    SHELL["Shell recibe\nel script con el valor ya incrustado"]
+    INJECT["Si el valor contiene ';cmd;'\nel shell lo ejecuta"]
+    ENV["Variable de entorno\nes dato, no código"]
+    SAFE_END(("Sin inyección"))
+
+    UNSAFE --> INTERP --> SHELL --> INJECT
+    SAFE --> ENV --> SAFE_END
+
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef neutral fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class UNSAFE,INJECT danger
+    class SAFE,ENV,SAFE_END secondary
+    class INTERP,SHELL warning
+```
+*La mitigación es siempre la misma: colocar el valor externo en `env:` y acceder con `$VAR` en el script.*
 
 ## Mitigación: variable de entorno intermedia
 

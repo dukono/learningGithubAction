@@ -104,6 +104,48 @@ Los siguientes parámetros y configuraciones son los que el examen GH-200 evalú
 | Audiencia (audience) | `sts.amazonaws.com` (default) | `api://AzureADTokenExchange` | por defecto del provider |
 | Soporte wildcard en trust | Si (`StringLike`) | No | Si (en condición de atributo) |
 
+```mermaid
+flowchart TD
+    GH["GitHub Actions\nJWT OIDC\n(iss: token.actions.githubusercontent.com)"]
+
+    GH --> AWS_sub
+    GH --> AZ_sub
+    GH --> GCP_sub
+
+    subgraph AWS["AWS IAM"]
+        AWS_sub["OIDC Provider\n(registrar issuer + thumbprint)"]
+        AWS_sub --> AWS_role["IAM Role\nsts:AssumeRoleWithWebIdentity"]
+        AWS_role --> AWS_cond["Condition:\nStringEquals/StringLike\nsub claim"]
+        AWS_cond --> AWS_action["aws-actions/\nconfigure-aws-credentials@v4"]
+    end
+
+    subgraph Azure["Azure Entra ID"]
+        AZ_sub["App Registration\no Managed Identity"]
+        AZ_sub --> AZ_fed["Federated Credential\n(subject exacto,\nsin wildcards)"]
+        AZ_fed --> AZ_aud["audience:\napi://AzureADTokenExchange"]
+        AZ_aud --> AZ_action["azure/login@v2"]
+    end
+
+    subgraph GCP["Google Cloud"]
+        GCP_sub["Workload Identity Pool\n+ Provider OIDC"]
+        GCP_sub --> GCP_sa["Service Account\nbinding + condition\nattribute.repository"]
+        GCP_sa --> GCP_action["google-github-actions/\nauth@v2"]
+    end
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class GH root
+    class AWS_sub,AWS_role,AWS_cond,AWS_action primary
+    class AZ_sub,AZ_fed,AZ_aud,AZ_action secondary
+    class GCP_sub,GCP_sa,GCP_action warning
+```
+
+*Configuración de trust policy en los tres cloud providers: el JWT de GitHub es el mismo; cada provider tiene su terminología y restricciones propias (Azure no soporta wildcards).*
+
 ## Buenas y malas prácticas
 
 **Hacer:** declarar `permissions: id-token: write` solo en el job que lo necesita, no a nivel de workflow — razón: el principio de mínimo privilegio aplica también al scope del permiso OIDC.

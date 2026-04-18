@@ -51,6 +51,19 @@ El escenario más común para mover runners es la promoción entre entornos: un 
 
 Cuando se elimina un runner group, los runners que contenía no se eliminan. GitHub los mueve automáticamente al **grupo Default** de la organización. Este comportamiento garantiza que los runners no queden en un estado huérfano y sigan siendo accesibles (aunque bajo la política más permisiva del grupo Default).
 
+```mermaid
+stateDiagram-v2
+    [*] --> Default : Runner registrado
+    Default --> GrupoCustom : Movido manualmente
+    GrupoCustom --> Default : Grupo eliminado\nautomáticamente
+    GrupoCustom --> OtroGrupo : Movido manualmente
+    OtroGrupo --> Default : Grupo eliminado\nautomáticamente
+    Default --> [*] : Runner eliminado
+    GrupoCustom --> [*] : Runner eliminado
+```
+
+*Ciclo de vida de asignación a runner groups: los runners siempre regresan al grupo Default cuando su grupo es eliminado.*
+
 Este comportamiento tiene implicaciones de seguridad importantes:
 
 1. Si el grupo eliminado tenía runners con acceso privilegiado, esos runners quedan automáticamente en el grupo Default, que puede estar abierto a toda la organización.
@@ -69,13 +82,26 @@ Una organización no puede ampliar el acceso más allá de lo que el enterprise 
 
 La jerarquía se puede visualizar así:
 
-```
-Enterprise runner group
-  └── Org A (permitida por enterprise)
-        └── Org runner group → Repos específicos de Org A
-  └── Org B (permitida por enterprise)
-        └── Org runner group → Repos específicos de Org B
-  └── Org C (NO permitida) → sin acceso
+```mermaid
+flowchart TD
+    EG[Enterprise runner group]:::root
+    EG --> OA[Org A\npermitida]:::secondary
+    EG --> OB[Org B\npermitida]:::secondary
+    EG --> OC[Org C\nNO permitida]:::danger
+
+    OA --> RGA[Org runner group\nde Org A]:::primary
+    RGA --> RA1[(Repo específico\nde Org A)]:::neutral
+
+    OB --> RGB[Org runner group\nde Org B]:::primary
+    RGB --> RB1[(Repo específico\nde Org B)]:::neutral
+
+    OC --> NONE(Sin acceso):::danger
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
 ```
 
 > **Clave para el examen:** Los runner groups de enterprise establecen el techo de acceso. Las organizaciones solo pueden restringir más, nunca ampliar más allá de lo que el enterprise permite.

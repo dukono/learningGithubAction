@@ -23,6 +23,24 @@ Los environments soportan cuatro tipos de protection rules configurables desde *
 
 Cuando un job referencia un environment con required reviewers, la ejecución se pausa y aparece en la UI con estado `waiting`. El job no consume minutos de ejecución mientras espera. Los revisores reciben una notificación por email y pueden aprobar o rechazar desde la interfaz de GitHub Actions o desde la API. Si se rechaza, el job termina con estado `failure`.
 
+```mermaid
+stateDiagram-v2
+    [*] --> queued : job scheduled
+    queued --> waiting : environment has required reviewers
+    waiting --> approved : reviewer approves
+    waiting --> rejected : reviewer rejects
+    waiting --> timeout : 35 days elapsed
+    approved --> running : runner picks up job
+    running --> success : job completes OK
+    running --> failure : job fails
+    rejected --> failure : job ends with failure
+    timeout --> failure : job cancelled
+    success --> [*]
+    failure --> [*]
+```
+
+*Estados posibles de un job que referencia un environment protegido, desde la cola hasta la resolución final.*
+
 > [ADVERTENCIA] Un job en estado `waiting` ocupa una posición en la cola del runner pero no ejecuta código. Sin embargo, el timeout del workflow sigue corriendo (máximo 35 días para espera de aprobación, configurable).
 
 ## Diferencia entre environment protection y branch protection
@@ -42,6 +60,32 @@ Ambas coexisten pero controlan cosas distintas. La siguiente tabla resume las di
 ## Ejemplo central
 
 El siguiente workflow completo muestra un pipeline de CI/CD con tres stages: build, deploy a staging (sin aprobación) y deploy a producción (con environment protection). El job `deploy-prod` solo se ejecuta si `deploy-staging` tiene éxito y si los revisores del environment `production` aprueban.
+
+```mermaid
+flowchart LR
+    A((push\nmain)) --> B[build]
+    B --> C[deploy-staging\nenvironment: staging]
+    C --> D{production\napproval gate}
+    D -->|approved| E[deploy-prod\nenvironment: production]
+    D -->|rejected| F(failure)
+    E --> G((deployed\nto prod))
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class A root
+    class B,C primary
+    class D warning
+    class E secondary
+    class F danger
+    class G secondary
+```
+
+*Pipeline CI/CD: los dos primeros jobs se ejecutan sin interrupción; el approval gate pausa el pipeline antes del deploy a producción.*
 
 ```yaml
 name: CI/CD con Environment Protection

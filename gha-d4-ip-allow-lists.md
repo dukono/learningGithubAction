@@ -16,6 +16,29 @@ Cuando la organización tiene activada la IP allow list, solo los clientes con I
 
 ## Tres soluciones disponibles
 
+```mermaid
+flowchart TD
+    PROB([Job falla por IP\nno incluida en allow list]) --> Q1{¿Es aceptable\ndeshabilitar\nel filtro IP\npara Actions?}
+    Q1 -- Sí --> S1[Solución 1\nDeshabilitar allow list\npara GitHub Actions]:::secondary
+    Q1 -- No --> Q2{¿Se puede usar\nGitHub-hosted runner\ncon IP fija?}
+    Q2 -- Sí --> S2[Solución 2\nLarger runner\ncon IP estática]:::primary
+    Q2 -- No --> S3[Solución 3\nSelf-hosted runner\nen red corporativa]:::warning
+
+    S1 --> C1(Toda la org exenta\nde filtro IP para Actions)
+    S2 --> C2(IP predecible añadida\na la allow list\nRequiere plan Team/EC)
+    S3 --> C3(IP corporativa ya\nen la allow list\nOverhead operativo)
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class PROB neutral
+    class Q1,Q2 neutral
+```
+
+*Árbol de decisión para elegir la solución adecuada al conflicto entre IP allow list y GitHub-hosted runners.*
+
 ### Solución 1: deshabilitar la IP allow list para GitHub Actions
 
 GitHub permite excluir a GitHub Actions del filtrado por IP. Con esta opción, la IP allow list sigue aplicándose a todos los demás clientes (usuarios, integraciones, tokens de acceso), pero los workflows de GitHub Actions pueden acceder a los recursos sin restricción de IP.

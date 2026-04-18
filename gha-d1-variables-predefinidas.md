@@ -22,6 +22,28 @@ Contiene el SHA completo del commit que disparó el workflow. En un evento `push
 docker build -t myapp:$GITHUB_SHA .
 ```
 
+```mermaid
+flowchart TD
+    PE["evento: push\na refs/heads/main"]
+    PRE["evento: pull_request\nfeature/login → main"]
+
+    PE --> PSHA["GITHUB_SHA =\nSHA del commit empujado"]
+
+    PRE --> MERGE["GitHub genera commit de merge\n(rama base + rama del PR)"]
+    MERGE --> MSHA["GITHUB_SHA =\nSHA del merge sintético"]
+    MERGE --> WARN["para el HEAD real del PR:\ngithub.event.pull_request.head.sha"]
+
+    classDef root    fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class PE,PRE root
+    class PSHA,MSHA secondary
+    class MERGE primary
+    class WARN warning
+```
+
 ### GITHUB_REF
 
 Referencia Git completa que disparó el workflow, en formato largo: `refs/heads/main` para ramas y `refs/tags/v1.0.0` para tags. Cuando se necesita distinguir entre un push a rama y un push de tag, `GITHUB_REF` es la variable que permite hacer esa distinción con un simple `grep` o comparación de prefijo en shell.
@@ -118,6 +140,23 @@ fi
 | `GITHUB_RUN_NUMBER` | `42` | `${{ github.run_number }}` |
 | `GITHUB_TOKEN` | `ghs_xxxxxxxxxxxx` | `${{ secrets.GITHUB_TOKEN }}` |
 | `RUNNER_OS` | `Linux` | `${{ runner.os }}` |
+
+```mermaid
+graph LR
+    YAML["Expresion YAML\n${{ github.ref }}"]
+    SHELL["Variable de entorno\n$GITHUB_REF"]
+
+    YAML -->|"evaluada por Actions\nantes de ejecutar el runner"| IF["Condiciones if:\nprops de job/step"]
+    SHELL -->|"evaluada por el shell\ndurante ejecucion del step"| RUN["Comandos run:\nscripts bash/pwsh"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+
+    class YAML,SHELL root
+    class IF primary
+    class RUN secondary
+```
 
 ---
 

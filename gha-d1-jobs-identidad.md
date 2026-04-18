@@ -12,10 +12,22 @@ Cada job en GitHub Actions es una unidad de ejecución aislada que corre en su p
 
 ## Árbol de propiedades: jerarquía de env
 
-```
-workflow (env: nivel raíz)
-└── job (env: sobreescribe workflow para ese job)
-    └── step (env: sobreescribe job para ese step)
+```mermaid
+graph TD
+    WF["env: workflow\n(menor precedencia)"]
+    JOB["env: job"]
+    STEP["env: step\n(mayor precedencia)"]
+
+    WF -->|"sobreescrito por"| JOB
+    JOB -->|"sobreescrito por"| STEP
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+
+    class WF root
+    class JOB primary
+    class STEP secondary
 ```
 
 La regla es simple: el scope más cercano al step gana. Un valor definido en `env` de step tiene prioridad absoluta sobre el mismo nombre definido en job o en workflow. Esta jerarquía es evaluada en tiempo de ejecución, no en tiempo de parseo.
@@ -116,6 +128,35 @@ jobs:
 ```
 
 Cualquier scope no mencionado queda a `none` cuando se especifica `permissions` en el job. Para revocar todo: `permissions: {}`.
+
+```mermaid
+flowchart LR
+    subgraph WF["Permisos de workflow"]
+        W1["contents: write"]
+        W2["pull-requests: read"]
+    end
+
+    subgraph JOB["Job define permissions:"]
+        J1["packages: write"]
+    end
+
+    subgraph EFF["Permisos efectivos del job\n(reemplazo total)"]
+        E1["packages: write"]
+        E2["contents: none"]
+        E3["pull-requests: none"]
+    end
+
+    WF -->|"reemplazado por"| JOB
+    JOB -->|"scopes no mencionados → none"| EFF
+
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+
+    class W1,W2 primary
+    class J1,E1 secondary
+    class E2,E3 danger
+```
 
 ---
 

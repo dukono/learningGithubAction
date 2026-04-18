@@ -32,6 +32,31 @@ El registro de un runner siempre comienza en la interfaz de GitHub, donde se obt
 
 Una vez en la pantalla de registro, GitHub muestra los comandos exactos incluyendo el token de registro temporal. Este token solo es válido durante **1 hora**; si expira, debes obtener uno nuevo desde la UI.
 
+```mermaid
+flowchart TD
+    START([Obtener token de registro\nválido 1 hora]) --> Q1{Nivel de\nregistro?}
+    Q1 -- Repositorio --> R1[Repo > Settings > Actions > Runners\nVisibilidad: solo ese repo]:::neutral
+    Q1 -- Organización --> R2[Org Settings > Actions > Runners\nVisibilidad: todos los repos de la org]:::primary
+    Q1 -- Enterprise --> R3[Enterprise Settings > Actions > Runners\nVisibilidad: todas las orgs]:::root
+
+    R1 --> CFG[./config.sh --url URL --token TOKEN\n--labels ... --runnergroup ...]
+    R2 --> CFG
+    R3 --> CFG
+    CFG --> SVC[./svc.sh install && start\nRunner como servicio del sistema]:::secondary
+    SVC --> IDLE(Runner en estado Idle\nlisto para recibir jobs):::secondary
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class START neutral
+    class Q1 neutral
+    class CFG neutral
+```
+
+*Proceso de registro de un self-hosted runner: el nivel determina la visibilidad; la instalación como servicio garantiza disponibilidad tras reinicios.*
+
 > [EXAMEN] El token de registro se obtiene desde Settings > Actions > Runners y tiene validez de 1 hora. Es distinto del token de autenticación ACTIONS_RUNNER_TOKEN que GitHub genera para cada job.
 
 ## Script de configuración config.sh

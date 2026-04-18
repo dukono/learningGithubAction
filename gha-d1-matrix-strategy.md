@@ -218,6 +218,25 @@ Con estas exclusiones, el producto cartesiano de 9 combinaciones se reduce a 7 j
 
 Una diferencia importante con `include`: las entradas de `exclude` nunca añaden nuevos jobs, solo eliminan. Las entradas de `include` se procesan después de `exclude`, por lo que es posible añadir de vuelta (con `include`) una combinación que fue excluida, aunque esto raramente es intencional.
 
+```mermaid
+graph LR
+    BASE["Producto cartesiano base\n3 OS x 3 versiones = 9 jobs"]
+    BASE -->|"matrix.exclude elimina"| REDUCED["8 jobs restantes"]
+    BASE -->|"matrix.include añade"| EXTRA["1 job extra\ncon propiedades adicionales"]
+    REDUCED --> FINAL["Total: 9 jobs ejecutados"]
+    EXTRA --> FINAL
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+
+    class BASE root
+    class REDUCED danger
+    class EXTRA primary
+    class FINAL secondary
+```
+
 ---
 
 ## Acceso a valores de matrix en steps

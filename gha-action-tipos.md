@@ -48,6 +48,26 @@ Las JavaScript actions pueden declarar tres puntos de ejecución: `pre:` (se eje
 
 > [CONCEPTO] Los pre/post hooks solo existen en JavaScript actions. Se definen en `action.yml` bajo `runs.pre` y `runs.post`. Docker y composite actions no tienen este mecanismo.
 
+```mermaid
+flowchart LR
+    PRE["runs.pre\n(antes del primer\nstep del job)"]
+    STEPS["Steps del job\n(workflow)"]
+    MAIN["runs.main\n(cuerpo principal\nde la action)"]
+    POST["runs.post\n(después del último\nstep — siempre)"]
+
+    PRE --> STEPS --> MAIN --> POST
+
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+
+    class PRE primary
+    class STEPS root
+    class MAIN primary
+    class POST secondary
+```
+*`post` se ejecuta siempre, incluso si el job falla — útil para limpieza de recursos.*
+
 ## Restricciones de composite actions
 
 Además de la incompatibilidad con `services:`, las composite actions tienen otras restricciones respecto a los jobs normales: los steps internos no soportan la directiva `if:` dentro del bloque `runs.steps`, y no pueden usar `timeout-minutes` en sus steps internos. Estas limitaciones son relevantes para los escenarios del examen donde se evalúa cuándo una composite action no es la solución correcta.
@@ -55,6 +75,37 @@ Además de la incompatibilidad con `services:`, las composite actions tienen otr
 ## Cuándo elegir cada tipo
 
 La selección del tipo depende de tres criterios: SO objetivo, entorno requerido y complejidad de la lógica. Para lógica multi-OS que usa comandos shell, la composite action es la elección natural. Para lógica que requiere acceso a la API de GitHub o librerías JavaScript, la JS action es la adecuada. Para lógica que requiere un entorno específico no disponible en los runners estándar y el workflow corre solo en Linux, la Docker action es la única opción.
+
+```mermaid
+flowchart TD
+    START(("¿Qué tipo de\naction usar?"))
+    Q1{{"¿Requiere macOS\no Windows?"}}
+    Q2{{"¿Requiere entorno\nDocker específico?"}}
+    Q3{{"¿Necesita API GitHub\no librerías JS?"}}
+    COMP["Composite action\n✓ multi-OS, shell steps"]
+    DOCK["Docker container action\n⚠ solo Linux"]
+    JS["JavaScript action\n✓ multi-OS, Node.js"]
+
+    START --> Q1
+    Q1 -->|sí| Q3
+    Q1 -->|no — solo Linux| Q2
+    Q2 -->|sí| DOCK
+    Q2 -->|no| Q3
+    Q3 -->|sí| JS
+    Q3 -->|no| COMP
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class START root
+    class Q1,Q2,Q3 warning
+    class JS,COMP secondary
+    class DOCK danger
+```
+*Docker container actions quedan excluidas en cuanto el SO objetivo incluye macOS o Windows.*
 
 ## Ejemplo central
 

@@ -59,49 +59,43 @@ La condición `steps.cache-npm.outputs.cache-hit != 'true'` evalúa el output us
 
 ## Diagrama: algoritmo de búsqueda de caché
 
-```
-Inicio del job
-      │
-      ▼
-┌─────────────────────────────────────┐
-│  Buscar caché con key exacta        │
-│  runner.os-npm-<hash-exacto>        │
-└─────────────────────────────────────┘
-      │
-   ¿Encontrado?
-   /          \
- Sí            No
-  │             │
-  ▼             ▼
-cache-hit=true  ┌─────────────────────────────────────┐
-Restaurar       │  Evaluar restore-keys en orden       │
-archivos        │  1. runner.os-npm-<hash-anterior>    │
-                │  2. runner.os-npm-                   │
-                │  3. runner.os-                       │
-                └─────────────────────────────────────┘
-                      │
-                ¿Alguno coincide?
-                /              \
-              Sí                No
-               │                 │
-               ▼                 ▼
-        cache-hit=false    cache-hit=false
-        Restaurar caché    Sin restauración
-        más reciente       (directorio vacío)
-        con ese prefijo
-               │                 │
-               └────────┬────────┘
-                        ▼
-                  Ejecutar pasos del job
-                        │
-                        ▼
-                ¿Job terminó con éxito?
-                /                    \
-              Sí                      No (con save-always: true → Sí)
-               │                           │
-               ▼                           ▼
-        Guardar caché              No guardar caché
-        bajo la key                (comportamiento por defecto)
+```mermaid
+flowchart TD
+    START(("Inicio del job"))
+    K{{"¿key coincide\nexactamente?"}}
+    HIT["cache-hit = true\nRestaurar archivos"]
+    RK{{"¿algún restore-key\ncoincide?"}}
+    RK_HIT["cache-hit = false\nRestaurar caché más\nreciente con ese prefijo"]
+    NO_CACHE["cache-hit = false\nSin restauración\n(directorio vacío)"]
+    STEPS["Ejecutar pasos del job"]
+    SUCCESS{{"¿Job exitoso?\n(o save-always: true)"}}
+    SAVE["Guardar caché\nbajo la key"]
+    NOSAVE["No guardar caché"]
+
+    START --> K
+    K -->|sí| HIT
+    K -->|no| RK
+    RK -->|sí| RK_HIT
+    RK -->|no| NO_CACHE
+    HIT --> STEPS
+    RK_HIT --> STEPS
+    NO_CACHE --> STEPS
+    STEPS --> SUCCESS
+    SUCCESS -->|sí| SAVE
+    SUCCESS -->|no| NOSAVE
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class START root
+    class K,RK,SUCCESS warning
+    class HIT,RK_HIT,SAVE secondary
+    class NO_CACHE,NOSAVE danger
+    class STEPS primary
 ```
 
 ---
@@ -115,6 +109,36 @@ GitHub Actions aplica un modelo de alcance (scope) para controlar qué caché pu
 3. Si tampoco hay caché en la rama base, puede restaurar cachés de la **rama por defecto** del repositorio (normalmente `main` o `master`).
 
 Este diseño significa que los cachés generados en `main` están disponibles como fallback para todas las ramas del repositorio, lo que maximiza los aciertos de caché en ramas nuevas que aún no han generado su propio caché. Sin embargo, los cachés creados en ramas de feature no están disponibles para otras ramas de feature ni para `main`, lo que evita contaminación cruzada entre contextos de trabajo. La consecuencia práctica: el primer run de una rama nueva usará el caché de `main`, que suele ser el más actualizado.
+
+```mermaid
+flowchart TD
+    NEW(("workflow en\nbranch nueva"))
+    C1{{"¿caché en\nbranch actual?"}}
+    C2{{"¿caché en\nbranch base\n(PR target)?"}}
+    C3{{"¿caché en\nbranch por defecto\n(main/master)?"}}
+    USE1["Restaurar caché\nde branch actual"]
+    USE2["Restaurar caché\nde branch base"]
+    USE3["Restaurar caché\nde main"]
+    EMPTY["Sin caché\n(instalación completa)"]
+
+    NEW --> C1
+    C1 -->|sí| USE1
+    C1 -->|no| C2
+    C2 -->|sí| USE2
+    C2 -->|no| C3
+    C3 -->|sí| USE3
+    C3 -->|no| EMPTY
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class NEW root
+    class C1,C2,C3 warning
+    class USE1,USE2,USE3 secondary
+    class EMPTY danger
+```
 
 ---
 

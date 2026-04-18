@@ -89,6 +89,24 @@ unzip artefacto.zip -d ./artefacto-contenido
 
 Este flujo es el patrón habitual cuando un sistema externo (un script de CD, una herramienta de release, un pipeline de otro sistema) necesita consumir los artefactos producidos por GitHub Actions sin intervención manual.
 
+```mermaid
+sequenceDiagram
+    participant S as Script externo
+    participant API as GitHub API
+    participant AZ as Azure Blob Storage
+
+    S->>API: GET /artifacts?name=mi-binario<br/>Authorization: Bearer TOKEN
+    API-->>S: 200 OK — lista de artefactos con IDs
+
+    S->>API: GET /artifacts/{artifact_id}/zip<br/>Authorization: Bearer TOKEN
+    API-->>S: 302 Found — Location: https://blob.core.windows.net/...
+    Note over API,AZ: URL firmada temporal — no necesita Authorization
+
+    S->>AZ: GET URL firmada (sin token)
+    AZ-->>S: 200 OK — contenido ZIP del artefacto
+```
+*Descarga de artefacto via API: GitHub responde con 302 que redirige a una URL firmada temporal en Azure Blob Storage.*
+
 ---
 
 ## A5.5 Retención de artefactos
@@ -102,6 +120,29 @@ La retención se puede configurar en tres niveles, de menor a mayor precedencia:
 3. **Límite máximo:** ningún valor puede superar 400 días. Si se especifica un valor mayor, GitHub lo rechaza con error.
 
 Cuando el período de retención expira, el artefacto se elimina automáticamente y ya no es recuperable. La fecha de expiración es visible en el campo `expires_at` de la API.
+
+```mermaid
+flowchart LR
+    ORG["Política org/repo\n(1–400 días)"]
+    WF["retention-days\nen upload-artifact"]
+    MAX["Límite máximo\n400 días"]
+    RESULT(("Retención\naplicada"))
+
+    ORG -->|"precedencia base"| RESULT
+    WF -->|"sobreescribe política"| RESULT
+    MAX -->|"nunca superable"| RESULT
+
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+
+    class ORG primary
+    class WF warning
+    class MAX danger
+    class RESULT root
+```
+*Precedencia de retención: el valor del step sobreescribe la política del repositorio; nunca puede superar 400 días.*
 
 ---
 

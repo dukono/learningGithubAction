@@ -50,6 +50,31 @@ La distincion de networking es critica y genera errores frecuentes cuando se mig
 | Job en runner host (sin `container`) | `localhost:<puerto>` o `127.0.0.1:<puerto>` |
 | Container job (con `container`) | `<nombre-del-servicio>:<puerto>` |
 
+```mermaid
+graph LR
+    subgraph "Runner host (runs-on)"
+        S1["step run:"]
+        S1 -->|"localhost:5432"| DB1["PostgreSQL"]
+    end
+
+    subgraph "Container job (container:)"
+        C1["step run:"]
+        C1 -->|"postgres:5432"| DB2["PostgreSQL"]
+        NET["red Docker interna"]
+        C1 --- NET
+        DB2 --- NET
+    end
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class S1,C1 primary
+    class DB1,DB2 secondary
+    class NET neutral
+```
+
 En el runner host, los service containers exponen sus puertos en la interfaz loopback del host, de modo que `localhost:5432` llega a PostgreSQL. En el container job, los contenedores estan en una red Docker aislada; el service container no esta en el localhost del contenedor job, sino en la misma red virtual donde es accesible por nombre. Si defines `services.db`, usas `db:5432`. Si defines `services.redis-cache`, usas `redis-cache:6379`. Ademas, en container job no es necesario mapear `ports` en el service container para que el job pueda acceder a el, aunque si puede ser necesario para acceso externo o depuracion.
 
 ---

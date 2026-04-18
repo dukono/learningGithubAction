@@ -18,16 +18,18 @@ La interfaz de GitHub organiza cada ejecución de workflow en tres niveles jerá
 
 Esta jerarquía importa porque el fallo se propaga hacia arriba: si un step falla, el job falla; si un job falla, el workflow run falla (salvo que se haya configurado `continue-on-error` o `if` para manejar el error). Cuando llegas a la página de un workflow run, el sistema te lleva directamente al job que falló y resalta visualmente el step problemático. Sin embargo, entender el contexto completo requiere revisar los steps anteriores al fallo.
 
+```mermaid
+mindmap
+  root((Workflow Run))
+    (Job: build)
+      Checkout
+      Set up Node.js
+      )Install dependencies — fallo(
+      [Run tests — skipped]
+    [Job: deploy]
+      [no ejecutado — depende de build]
 ```
-Workflow Run
-├── Job: build
-│   ├── Step: Checkout
-│   ├── Step: Set up Node.js
-│   ├── Step: Install dependencies   ← fallo aquí
-│   └── Step: Run tests              ← no ejecutado (skipped)
-└── Job: deploy
-    └── (no ejecutado, depende de build)
-```
+*Jerarquía run → job → step: el fallo en un step cancela los pasos posteriores y bloquea los jobs dependientes.*
 
 > [CONCEPTO] La vista de un job muestra los steps en orden de ejecución. Los steps no ejecutados por un fallo anterior aparecen en gris con el estado "skipped". Los steps que se ejecutaron antes del fallo aparecen en verde o rojo según su resultado individual.
 
@@ -273,36 +275,30 @@ La siguiente tabla resume los elementos clave de la interfaz de logs, su ubicaci
 
 El siguiente diagrama muestra el flujo recomendado para diagnosticar un fallo usando la UI de GitHub Actions.
 
+```mermaid
+flowchart TD
+    A(("Fallo detectado")) --> B["Ver lista de jobs\n¿Cuál falló?"]
+    B --> C["Abrir job fallido\nstep rojo = fallo"]
+    C --> D["Revisar steps ANTERIORES\nal fallo"]
+    D --> E{{"¿Qué necesito?"}}
+    E -->|"Marcas de tiempo"| F["Activar timestamps"]
+    E -->|"Buscar texto"| G["Búsqueda de texto en UI"]
+    E -->|"Log truncado"| H[("Descargar .zip")]
+    E -->|"Vista resumen"| I["Pestaña Summary"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef neutral fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef storage fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class A root
+    class B,C,D primary
+    class E warning
+    class F,G,I neutral
+    class H storage
 ```
-Workflow Run (fallo detectado)
-        │
-        ▼
-┌───────────────────────┐
-│  Ver lista de jobs    │
-│  ¿Cuál falló?         │
-└──────────┬────────────┘
-           │
-           ▼
-┌───────────────────────┐
-│  Abrir job fallido    │
-│  Step rojo = fallo    │
-└──────────┬────────────┘
-           │
-           ▼
-┌───────────────────────┐
-│  Revisar steps        │
-│  ANTERIORES al fallo  │
-│  (pueden tener causa) │
-└──────────┬────────────┘
-           │
-           ├──── Log largo? ──► Activar timestamps
-           │
-           ├──── Mucho texto? ─► Usar búsqueda de texto
-           │
-           ├──── Log truncado? ─► Descargar .zip
-           │
-           └──── ¿Resumen? ────► Pestaña Summary
-```
+*Flujo recomendado para diagnosticar un fallo en la UI: revisar steps anteriores al rojo antes de actuar.*
 
 ---
 

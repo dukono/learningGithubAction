@@ -59,6 +59,46 @@ Los niveles de confianza de mayor a menor seguridad son los siguientes. Esta jer
 - **Major tag flotante** (`@v4`): conveniente pero mutable, riesgo de supply chain attack.
 - **Floating tag** (`@main`, `@master`): el más peligroso, apunta siempre al último commit de la rama.
 
+```mermaid
+flowchart TD
+    A["@main / @master\nFloating branch tag"]
+    B["@v4\nMajor floating tag"]
+    C["@v4.2.2\nSemver específico"]
+    D["@11bd71901bbe5b...\nSHA de commit completo"]
+
+    A -->|"más seguro"| B
+    B -->|"más seguro"| C
+    C -->|"más seguro"| D
+
+    A_risk["Riesgo: ALTO\nApunta a HEAD de rama\ncambia en cada commit"]
+    B_risk["Riesgo: MEDIO\nTag mutable\nsupply chain attack posible"]
+    C_risk["Riesgo: BAJO\nConvención semver respetada\npero sin garantía técnica"]
+    D_ok["Inmutable\nNingún riesgo de tag moving\nDependabot lo mantiene actualizado"]
+
+    A --- A_risk
+    B --- B_risk
+    C --- C_risk
+    D --- D_ok
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class A danger
+    class B warning
+    class C neutral
+    class D secondary
+    class A_risk danger
+    class B_risk warning
+    class C_risk neutral
+    class D_ok secondary
+```
+
+*Jerarquía de seguridad: solo el SHA de commit completo garantiza que el código ejecutado no cambia entre ejecuciones.*
+
 > [EXAMEN] En el examen, cuando se pregunta qué método de referencia a actions garantiza que el código ejecutado no cambia entre ejecuciones, la respuesta es siempre el SHA de commit completo.
 
 ## Actions de GitHub vs. Actions de Terceros

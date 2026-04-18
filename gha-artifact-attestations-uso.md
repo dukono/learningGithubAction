@@ -14,6 +14,39 @@ La action `actions/attest-build-provenance` genera una attestation de provenance
 
 El parámetro principal para identificar el artefacto es `subject-path` (para binarios locales) o `subject-digest` combinado con `subject-name` (para artefactos remotos como imágenes de contenedor).
 
+```mermaid
+sequenceDiagram
+    participant J as Job (Runner)
+    participant GTS as GitHub Token Service
+    participant F as Fulcio (CA)
+    participant R as Rekor (Log)
+    participant GHAPI as GitHub API
+
+    J->>GTS: solicitar token OIDC<br/>(id-token: write)
+    GTS-->>J: JWT firmado con identidad del runner
+
+    J->>J: calcular SHA-256 del artefacto<br/>(subject-path o subject-digest)
+
+    J->>F: presentar JWT OIDC<br/>→ solicitar certificado de firma efímero
+    F-->>J: certificado X.509 temporal<br/>(vinculado a identidad OIDC)
+
+    J->>J: firmar digest del artefacto<br/>con clave efímera + certificado
+
+    J->>R: publicar firma + certificado<br/>en transparency log
+    R-->>J: log entry (inmutable)
+
+    J->>GHAPI: POST /attestations<br/>(attestations: write)<br/>bundle DSSE con firma y claims
+    GHAPI-->>J: attestation-url
+
+    Note over J,GHAPI: Verificación posterior
+    J->>GHAPI: gh attestation verify <artifact><br/>--repo owner/repo
+    GHAPI->>R: consultar log entry
+    R-->>GHAPI: confirmar firma válida
+    GHAPI-->>J: verified ✓
+```
+
+*Ciclo completo de generación y verificación: dos permisos del job habilitan la firma (id-token: write) y el almacenamiento (attestations: write).*
+
 > [ADVERTENCIA] Los permisos `id-token: write` y `attestations: write` deben declararse en el job que ejecuta `attest-build-provenance`, no solo a nivel de workflow. Si se declaran solo a nivel de workflow y el job tiene su propio bloque `permissions:`, el job hereda solo lo que declare explícitamente. Omitir cualquiera de los dos permisos hace que la action falle con un error de autorización.
 
 ## Parámetros de la action

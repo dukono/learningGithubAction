@@ -85,6 +85,23 @@ Esto significa que un job de 10 minutos en macOS consume lo mismo del plan que 1
 
 La implicación práctica es que los jobs que no requieren macOS o Windows de forma estricta (tests de lógica de negocio, linting, builds de contenedores) deben ejecutarse en Linux para optimizar el consumo de minutos.
 
+```mermaid
+flowchart LR
+    L[Linux\nubuntu-*]:::secondary
+    W[Windows\nwindows-*]:::warning
+    M[macOS\nmacos-*]:::danger
+
+    L -- "×1" --> C1(10 min reales\n= 10 min del plan)
+    W -- "×2" --> C2(10 min reales\n= 20 min del plan)
+    M -- "×10" --> C3(10 min reales\n= 100 min del plan)
+
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+```
+
+*Multiplicadores de minutos: un job de 10 minutos en macOS consume el mismo presupuesto que 10 jobs idénticos en Linux.*
+
 ## Actualización semanal de imágenes y riesgo de rotura
 
 Las imágenes de GitHub-hosted runners se **actualizan semanalmente**. GitHub instala versiones más recientes de las herramientas preinstaladas, aplica parches de seguridad y puede añadir o retirar herramientas.

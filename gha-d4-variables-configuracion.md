@@ -10,6 +10,26 @@ Las configuration variables (variables de configuración) permiten almacenar val
 
 Tanto las variables como los secrets pueden definirse a nivel de repositorio, entorno u organización. La diferencia clave está en cómo se tratan sus valores durante la ejecución del workflow.
 
+```mermaid
+flowchart TD
+    Q1{¿El valor puede\naparece en logs\nsin riesgo?} -- Sí --> VAR[Configuration Variable\nvars.NOMBRE\nTexto plano en logs]:::secondary
+    Q1 -- No --> Q2{¿Es un token,\ncontraseña o clave?}
+    Q2 -- Sí --> SEC[Secret\nsecrets.NOMBRE\nEnmascarado como ***]:::warning
+    Q2 -- Tal vez --> SEC
+
+    VAR --> EJ1(NODE_VERSION\nDEPLOY_REGION\nENV_NAME)
+    SEC --> EJ2(API_TOKEN\nDB_PASSWORD\nSSH_KEY)
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class Q1,Q2 neutral
+```
+
+*Criterio de decisión: si el valor puede aparecer en los logs de CI/CD sin riesgo de seguridad, es una variable; de lo contrario, es un secret.*
+
 Los secrets están enmascarados en los logs: si el valor de un secret aparece en la salida de un step, GitHub lo reemplaza automáticamente por `***`. Las variables no tienen este comportamiento: su valor se imprime tal cual en los logs.
 
 > [EXAMEN] Esta diferencia es el punto más evaluado en el examen. Las variables nunca se enmascaran en los logs, independientemente de cómo se usen. Cualquier dato sensible (tokens, contraseñas, claves privadas) debe almacenarse siempre como secret, nunca como variable.
@@ -96,6 +116,23 @@ Cuando existe la misma variable definida en varios niveles, la precedencia es (d
 3. Organization (organización)
 
 Esta jerarquía es idéntica a la de los secrets. Si un job tiene `environment: production` y la variable `DEPLOY_REGION` existe tanto a nivel de entorno como a nivel de repositorio, el workflow usará el valor del entorno.
+
+```mermaid
+flowchart LR
+    ORG[(Organization\nvars.DEPLOY_REGION\n= eu-west-1)]:::neutral
+    REPO[(Repository\nvars.DEPLOY_REGION\n= us-east-1)]:::primary
+    ENV[(Environment production\nvars.DEPLOY_REGION\n= ap-southeast-1)]:::secondary
+
+    ORG -- sobreescrito por --> REPO
+    REPO -- sobreescrito por --> ENV
+    ENV --> JOB([Job con\nenvironment: production\n→ usa ap-southeast-1]):::secondary
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+```
+
+*Jerarquía de precedencia de variables: environment > repository > organization. El nivel más específico reemplaza completamente el valor del nivel superior.*
 
 > [CONCEPTO] La precedencia no es aditiva: el valor del nivel más específico reemplaza completamente al del nivel superior. No hay fusión ni herencia parcial de valores.
 

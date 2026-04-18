@@ -18,6 +18,31 @@ La siguiente tabla resume las tres modalidades, su alcance y el momento en que s
 | Re-run failed jobs | Solo los jobs con estado `failure` o `cancelled` | El fallo fue puntual y los jobs exitosos no deben repetirse |
 | Re-run a specific job | Un único job concreto | Disponible via API; desde la UI no existe esta opción directa |
 
+```mermaid
+flowchart TD
+    Q{{"¿Qué falló?"}}
+    Q -->|"Todo el workflow\no estado inconsistente"| ALL["Re-run all jobs\n→ todos los jobs vuelven a correr"]
+    Q -->|"Solo algunos jobs"| FAILED["Re-run failed jobs\n→ solo jobs failure/cancelled"]
+    Q -->|"Un job específico\n(automatización)"| API["Re-run job concreto\nvía REST API"]
+
+    ALL --> DBG{{"¿Necesitas\nmás logs?"}}
+    FAILED --> DBG
+    DBG -->|sí| ENA["Enable debug logging\n(RUNNER_DEBUG + STEP_DEBUG)"]
+    DBG -->|no| GO(("Ejecutar\nsin debug"))
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class Q root
+    class ALL,FAILED,API primary
+    class DBG warning
+    class ENA warning
+    class GO secondary
+```
+*Árbol de decisión para elegir modalidad de re-ejecución y si activar debug logging.*
+
 ## A4.1 Re-run all jobs
 
 La opción "Re-run all jobs" reinicia el workflow completo desde cero. Todos los jobs, incluidos los que ya habían tenido éxito, se vuelven a ejecutar. Esto es útil cuando se sospecha que el estado parcialmente completado puede haber dejado efectos secundarios, o cuando se quiere garantizar un resultado totalmente limpio.

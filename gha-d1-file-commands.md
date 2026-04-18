@@ -15,6 +15,26 @@ Hasta 2022, GitHub Actions usaba workflow commands escritos en stdout con la sin
 | `GITHUB_STEP_SUMMARY` | Pestaña Summary de la UI | Mostrar markdown en el resumen | `echo "# Titulo" >> $GITHUB_STEP_SUMMARY` | Solo visible en la UI |
 | `GITHUB_PATH` | Steps siguientes del mismo job | Añadir directorio al PATH | `echo "/ruta/bin" >> $GITHUB_PATH` | Uso transparente con el nombre del binario |
 
+```mermaid
+graph LR
+    STEP["Step actual"]
+
+    STEP -->|"GITHUB_ENV"| NEXT_STEPS["Steps siguientes\ndel mismo job"]
+    STEP -->|"GITHUB_PATH"| NEXT_STEPS
+    STEP -->|"GITHUB_OUTPUT"| NEXT_JOBS["Jobs posteriores\n(via needs)"]
+    STEP -->|"GITHUB_STEP_SUMMARY"| UI["Pestaña Summary\nen la UI de GitHub"]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+
+    class STEP root
+    class NEXT_STEPS primary
+    class NEXT_JOBS secondary
+    class UI neutral
+```
+
 ## GITHUB_ENV: variables entre steps del mismo job
 
 `GITHUB_ENV` permite que un step defina una variable de entorno que estara disponible en todos los steps siguientes del mismo job. La variable NO cruza a jobs posteriores; para eso se necesita `GITHUB_OUTPUT` combinado con `needs`. La sintaxis es `echo "NOMBRE=valor" >> $GITHUB_ENV`. El archivo al que apunta `$GITHUB_ENV` es creado por el runner antes de ejecutar el job y eliminado al terminar. Si se necesita un valor multilínea, se usa un delimitador: `echo "BODY<<EOF" >> $GITHUB_ENV`, luego el contenido, luego `echo "EOF" >> $GITHUB_ENV`. El scope limitado al job es intencional: cada job corre en un runner propio (o en un entorno limpio), por lo que no hay memoria compartida entre jobs.

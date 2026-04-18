@@ -31,6 +31,21 @@ organización/.github/
 
 Cada starter workflow requiere dos ficheros que deben tener exactamente el mismo nombre base: el fichero YAML del workflow y un fichero `.properties.json` con los metadatos. Ambos deben estar en `workflow-templates/`. Si el fichero `.properties.json` no existe, el template no aparecerá en la UI de la organización.
 
+```mermaid
+mindmap
+  root((org/.github))
+    (workflow-templates)
+      ci-node.yml
+      ci-node.properties.json
+      ci-python.yml
+      ci-python.properties.json
+    [ISSUE_TEMPLATE]
+      bug_report.md
+    [PULL_REQUEST_TEMPLATE.md]
+    [profile/README.md]
+```
+*Estructura del repositorio especial .github de la organización — los starter workflows viven en workflow-templates/.*
+
 ## El fichero `.properties.json`: metadatos del starter workflow
 
 El fichero de propiedades es lo que convierte un YAML ordinario en un starter workflow reconocido por GitHub. Sin este fichero, el YAML en `workflow-templates/` es simplemente un fichero más; con él, GitHub lo registra como plantilla disponible para los repositorios de la organización.
@@ -119,6 +134,30 @@ El placeholder `$default-branch` es una funcionalidad exclusiva de los starter w
 Esto es importante porque no todos los repositorios usan la misma rama por defecto. Algunos usan `main`, otros usan `master`, y algunos proyectos legacy pueden usar `develop` o incluso nombres personalizados. Si el starter workflow codificara `main` directamente, fallaría silenciosamente en repositorios cuya rama principal se llame de otra forma.
 
 El placeholder solo funciona en el contexto de starter workflows. Si se copia ese YAML directamente a un repositorio sin pasar por la UI de GitHub, el string `$default-branch` no se reemplazará y el workflow fallará porque `$default-branch` no es una rama válida. Este es un error común que aparece en la certificación.
+
+```mermaid
+flowchart TD
+    SRC[("workflow-templates/\nci-node.yml")]
+    SRC --> A{{"¿Cómo llega al repositorio?"}}
+    A -->|"UI → New workflow\n→ Configure"| B["GitHub sustituye\n$default-branch → main"]
+    A -->|"Copia manual\ngit cp / copia"| C["$default-branch permanece\ncomo texto literal"]
+    B --> OK(("Workflow se activa\nen la rama por defecto"))
+    C --> ERR[/"Workflow no se dispara\n(rama inexistente)"/]
+
+    classDef root fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef warning fill:#9a6700,color:#fff,stroke:#7d4e00
+    classDef storage fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class SRC storage
+    class A root
+    class B warning
+    class C danger
+    class OK secondary
+    class ERR danger
+```
+*$default-branch solo se resuelve cuando GitHub instancia el template desde la UI — la copia manual lo deja como literal.*
 
 > **Clave de examen:** `$default-branch` solo se sustituye cuando el workflow se instancia desde la UI de GitHub Actions. En un workflow copiado manualmente, debe reemplazarse a mano por el nombre real de la rama.
 

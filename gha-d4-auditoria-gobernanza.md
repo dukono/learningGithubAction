@@ -93,13 +93,53 @@ Los destinos de streaming soportados son:
 | **Datadog** | HTTPS Logs API | Dashboards y alertas de seguridad en Datadog |
 | **Google Cloud Storage** | HTTPS / GCS API | Almacenamiento en GCP, BigQuery |
 
-La configuración se realiza en **Organization Settings > Security > Audit log > Log streaming**. Con streaming activo, la retención efectiva pasa de 90 días a hasta **7 años**, según la política de retención configurada en el destino externo.
+La configuración se realiza en **Organization Settings > Security > Audit log > Log streaming**.
+
+```mermaid
+flowchart LR
+    GH[(GitHub\nAudit log\n90 días UI)]:::storage
+    GH -- streaming\ntiempo real --> S3[(Amazon S3\nhasta 7 años)]:::secondary
+    GH -- streaming --> AEH[(Azure Event Hubs\nMicrosoft Sentinel)]:::secondary
+    GH -- streaming --> SPL[(Splunk)]:::secondary
+    GH -- streaming --> DD[(Datadog)]:::secondary
+    GH -- streaming --> GCS[(Google Cloud Storage\nBigQuery)]:::secondary
+
+    classDef storage   fill:#6e40c9,color:#fff,stroke:#5a32a3
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+```
+
+*Audit log streaming (exclusivo de GitHub Enterprise Cloud): los eventos se envían en tiempo real a destinos externos, extendiendo la retención más allá de los 90 días de la UI.* Con streaming activo, la retención efectiva pasa de 90 días a hasta **7 años**, según la política de retención configurada en el destino externo.
 
 > [EXAMEN] El audit log streaming es una característica exclusiva de **GitHub Enterprise Cloud**. Si un escenario de examen menciona retención superior a 90 días o integración en tiempo real con Splunk/Datadog/SIEM, la respuesta siempre requiere GitHub Enterprise Cloud con streaming habilitado.
 
 ## Gobernanza: visibilidad de uso de Actions en la organización
 
 El audit log resuelve el "qué pasó", pero la gobernanza también requiere políticas preventivas que controlen "qué puede pasar". GitHub permite a los administradores de organización combinar tres palancas de gobernanza.
+
+```mermaid
+flowchart TD
+    subgraph PREVENTIVO[Políticas preventivas]
+        direction TB
+        P1[Actions permitidas\nAllow-list / select]:::primary
+        P2[Runner groups\nAcceso por repo]:::primary
+        P3[Secrets de org\nVisibilidad restringida]:::primary
+    end
+
+    subgraph REACTIVO[Auditoría reactiva]
+        direction TB
+        A1[Audit log\nOrg Settings > Security]:::storage
+        A2[API GET /orgs/org/audit-log\nphrase=action:workflows.*]:::storage
+        A3[Streaming a SIEM\nS3, Splunk, Datadog\nsolo Enterprise Cloud]:::storage
+    end
+
+    PREVENTIVO -- define qué es\nuna anomalía --> REACTIVO
+    REACTIVO -- retroalimenta\nrefinamiento de políticas --> PREVENTIVO
+
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef storage   fill:#6e40c9,color:#fff,stroke:#5a32a3
+```
+
+*La gobernanza efectiva combina políticas preventivas con auditoría reactiva: las políticas solas no bastan sin revisión del audit log.*
 
 **Actions permitidas:** en **Organization Settings > Actions > General > Actions permissions** se puede restringir qué actions pueden usar los repositorios de la organización. Las opciones son: solo actions del mismo repositorio, solo actions del mismo owner, actions de GitHub verificadas, o una lista de patrones permitidos explícitos (`octocat/hello-world@v1`, `actions/*@*`).
 

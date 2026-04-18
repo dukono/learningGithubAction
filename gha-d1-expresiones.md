@@ -101,6 +101,23 @@ if: ${{ endsWith(github.ref_name, '-hotfix') }}
 
 `fromJSON` es el inverso de `toJSON`: parsea una cadena JSON y devuelve el objeto, array o valor primitivo correspondiente. Su caso de uso más importante es la generación dinámica de matrices (`strategy.matrix`): un step anterior genera la cadena JSON del array de variantes, la almacena en un output, y el job posterior la parsea con `fromJSON` para construir la matriz. También permite recuperar estructuras complejas pasadas como strings entre jobs. Es importante que la cadena de entrada sea JSON válido; de lo contrario, el workflow fallará con un error de parsing en tiempo de evaluación.
 
+```mermaid
+sequenceDiagram
+    participant S as step (id: gen)
+    participant JO as job: setup<br/>(outputs)
+    participant N as needs.setup
+    participant M as strategy.matrix
+
+    S->>S: echo 'matrix=["ubuntu","windows"]'<br/>>> $GITHUB_OUTPUT
+    Note right of S: string JSON en steps.gen.outputs.matrix
+
+    JO->>N: outputs.matrix: ${{ steps.gen.outputs.matrix }}
+    Note over JO,N: sigue siendo un string
+
+    N->>M: os: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    Note right of M: fromJSON convierte string → array<br/>genera 2 jobs paralelos
+```
+
 ```yaml
 jobs:
   setup:

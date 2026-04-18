@@ -29,6 +29,32 @@ SLSA v1.0 define tres niveles de build (más un nivel 0 implícito para "sin gar
 
 > [EXAMEN] SLSA v1.0 usa los términos **Build L1, L2, L3** (no L0-L3 ni L1-L4 como en versiones anteriores). El examen GH-200 puede referirse a "SLSA Build Level 2" para describir lo que GitHub Actions proporciona con hosted runners. GitHub Actions cumple **Build L2** porque el build ocurre en una plataforma gestionada (GitHub-hosted runners) y el provenance es firmado por la plataforma, no por el workflow del usuario.
 
+```mermaid
+flowchart LR
+    L0["Build L0\nSin garantías\nEl artefacto existe"]
+    L1["Build L1\nProvenance generado\npor el build"]
+    L2["Build L2\nBuild en plataforma\ngestionada\nFirma de la plataforma\n★ GitHub Actions nativo"]
+    L3["Build L3\nPlataforma con controles\nanti-manipulación\nadicionales"]
+
+    L0 -->|"añade:\nDocumentación\nde origen"| L1
+    L1 -->|"añade:\nFirma por\nplataforma,\nno developer"| L2
+    L2 -->|"añade:\nResistencia a\nmanipulación\nen build"| L3
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef danger    fill:#cf222e,color:#fff,stroke:#a40e26
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef warning   fill:#9a6700,color:#fff,stroke:#7d4e00
+
+    class L0 danger
+    class L1 warning
+    class L2 secondary
+    class L3 primary
+```
+
+*Escalera SLSA: cada nivel añade garantías sobre quién firma el provenance. GitHub Actions con hosted runners cumple L2 de forma nativa.*
+
 La transición de L1 a L2 es la más relevante para seguridad práctica: en L1, el propio developer podría generar un provenance falso porque controla el proceso de firma. En L2, la firma la emite la plataforma de build (GitHub), lo que significa que un atacante necesitaría comprometer la infraestructura de GitHub para falsificar el provenance.
 
 ## Información capturada en el provenance SLSA
@@ -55,6 +81,35 @@ Sigstore es la infraestructura de firma que usa GitHub para las artifact attesta
 **Rekor:** Transparency log inmutable donde se registran todas las firmas. Cualquier firma publicada en Rekor puede ser verificada independientemente y es auditable públicamente. Proporciona no repudio: una vez que una firma está en Rekor, no puede borrarse.
 
 **Cosign:** Herramienta CLI para firmar y verificar imágenes de contenedor y artefactos binarios usando la infraestructura de Sigstore. Es el cliente de referencia del ecosistema.
+
+```mermaid
+flowchart TD
+    Runner["GitHub Actions Runner\n(id-token: write)"]
+    Runner -->|"token OIDC\ncomo identidad"| Fulcio
+    Fulcio["Fulcio\nCA de Sigstore\nEmite certificado efímero\n(válido minutos)"]
+    Fulcio -->|"certificado temporal\ncon identidad del runner"| Sign
+    Sign["Firma del artefacto\n(hash SHA-256\n+ certificado Fulcio)"]
+    Sign -->|"publica firma\ne identidad"| Rekor
+    Rekor["Rekor\nTransparency Log\nInmutable y público\nNo-repudio garantizado"]
+    Sign -->|"bundle\nde attestation"| GitHub
+    GitHub["GitHub API\n/attestations\n(almacena para verificación)"]
+    Rekor -.->|"verificación\nindependiente"| Cosign
+    Cosign["Cosign / gh attestation\nHerramienta de verificación\nConsulta Rekor + GitHub"]
+
+    classDef root      fill:#1f2328,color:#fff,stroke:#444,font-weight:bold
+    classDef primary   fill:#0969da,color:#fff,stroke:#0550ae
+    classDef secondary fill:#2da44e,color:#fff,stroke:#1a7f37
+    classDef neutral   fill:#e6edf3,color:#1f2328,stroke:#d0d7de
+    classDef storage   fill:#6e40c9,color:#fff,stroke:#5a32a3
+
+    class Runner root
+    class Fulcio,Sign primary
+    class Rekor storage
+    class GitHub storage
+    class Cosign secondary
+```
+
+*Ecosistema Sigstore: el runner usa su token OIDC para obtener un certificado efímero de Fulcio; la firma se publica en Rekor para auditoría permanente.*
 
 > [CONCEPTO] La diferencia entre Sigstore/Cosign y firma GPG tradicional es el modelo de confianza: GPG requiere gestionar y distribuir claves públicas (PKI manual); Sigstore usa identidades OIDC efímeras y un transparency log público, lo que elimina la gestión de claves y proporciona auditoría automática.
 
