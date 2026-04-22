@@ -2,22 +2,21 @@
 
 Cada contexto es un objeto que GitHub inyecta en cada ejecución. Se accede con `${{ contexto.campo }}`.
 
-> Despliega cada sección para ver todos los campos disponibles.
+> Despliega cada sección para ver la estructura completa.
 
-**¿Están todos los campos?**
-Los contextos `env`, `job`, `steps`, `runner`, `secrets`, `vars`, `strategy`, `matrix`, `needs`, `inputs` y `jobs` están **completos** — tienen todos sus campos posibles.
-El contexto `github` (propiedades generales) está **completo**.
-Para `github.event`, se documentan todos los campos **relevantes** de cada evento. Los payloads de webhook de GitHub tienen decenas de campos adicionales de bajo nivel (`node_id`, URLs internas de la API, campos de billing, etc.) que no se usan en workflows y se omiten deliberadamente.
+**Cobertura:**
+Los contextos `env`, `job`, `steps`, `runner`, `secrets`, `vars`, `strategy`, `matrix`, `needs`, `inputs` y `jobs` están **completos**.
+Para `github.event` se documentan todos los campos **relevantes** de cada evento (se omiten `node_id`, URLs internas de API y campos de bajo nivel que no se usan en workflows).
 
 ---
 
 ## Índice
 
 - [github — propiedades generales](#github--propiedades-generales)
-- [github.event según el evento](#githubEvent-según-el-evento)
-  - [Campos comunes a casi todos los eventos](#campos-comunes-a-casi-todos-los-eventos): `repository`, `sender`, `organization`, `installation`
+- [github.event — campos comunes a casi todos los eventos](#githubEvent--campos-comunes)
+- [github.event — por evento](#githubEvent--por-evento)
   - [push](#push) · [create](#create) · [delete](#delete)
-  - [pull\_request y pull\_request\_target](#pull_request-y-pull_request_target)
+  - [pull\_request / pull\_request\_target](#pull_request--pull_request_target)
   - [pull\_request\_review](#pull_request_review)
   - [pull\_request\_review\_comment](#pull_request_review_comment)
   - [issues](#issues)
@@ -47,7 +46,7 @@ Para `github.event`, se documentan todos los campos **relevantes** de cada event
 - [strategy y matrix](#strategy-y-matrix)
 - [needs](#needs)
 - [inputs](#inputs)
-- [jobs — solo workflows reutilizables](#jobs--solo-workflows-reutilizables)
+- [jobs — solo reusable workflows](#jobs--solo-reusable-workflows)
 - [Arrays y operador .*](#arrays-y-operador-)
 - [Funciones](#funciones)
 
@@ -55,208 +54,282 @@ Para `github.event`, se documentan todos los campos **relevantes** de cada event
 
 ## `github` — propiedades generales
 
-Disponibles en **todos** los eventos, independientemente del trigger.
+Disponibles en **todos** los eventos.
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.actor` | `"dukono"` | Usuario que disparó el workflow |
-| `github.actor_id` | `"12345678"` | ID numérico del usuario |
-| `github.triggering_actor` | `"dukono"` | Quien disparó **esta ejecución concreta** — difiere de `actor` si alguien pulsó re-run |
-| `github.token` | `"ghs_xxxxx"` | Token automático, equivale a `secrets.GITHUB_TOKEN` |
-| `github.repository` | `"dukono/my-app"` | Nombre completo del repo |
-| `github.repository_id` | `"987654321"` | ID numérico del repo |
-| `github.repository_owner` | `"dukono"` | Solo el propietario (organización o usuario) |
-| `github.repository_owner_id` | `"12345678"` | ID numérico del propietario |
-| `github.ref` | `"refs/heads/main"` | Ref completa. En PR vale `refs/pull/11/merge` (rama virtual), no `refs/heads/feature` |
-| `github.ref_name` | `"main"` | Nombre corto: rama, tag o `"11/merge"` si es PR |
-| `github.ref_type` | `"branch"` | `"branch"` o `"tag"` |
-| `github.ref_protected` | `false` | `true` si la rama está protegida en GitHub |
-| `github.head_ref` | `"feature/oauth"` | ⚠️ Solo en `pull_request` — nombre de la rama **origen** del PR |
-| `github.base_ref` | `"main"` | ⚠️ Solo en `pull_request` — nombre de la rama **destino** del PR |
-| `github.sha` | `"a1b2c3d4..."` | SHA completo del commit que disparó el evento |
-| `github.event_name` | `"push"` | Nombre del evento: `push`, `pull_request`, `release`, `schedule`, ... |
-| `github.workflow` | `"CI Pipeline"` | El campo `name:` del archivo YAML del workflow |
-| `github.workflow_ref` | `"dukono/my-app/.github/workflows/ci.yml@refs/heads/main"` | Ruta completa al archivo del workflow |
-| `github.workflow_sha` | `"a1b2c3d4..."` | SHA del archivo del workflow |
-| `github.job` | `"build"` | El `id:` del job actual en el YAML |
-| `github.run_id` | `"9876543210"` | ID único global de esta ejecución del workflow |
-| `github.run_number` | `"42"` | Número secuencial de ejecuciones de este workflow en el repo |
-| `github.run_attempt` | `"1"` | Número de reintento — `"2"` si se pulsó re-run |
-| `github.secret_source` | `"Actions"` | Origen de los secrets: `"Actions"`, `"Dependabot"`, `"None"` |
-| `github.retention_days` | `"90"` | Días que se guardan los artifacts y logs |
-| `github.server_url` | `"https://github.com"` | URL base de GitHub |
-| `github.api_url` | `"https://api.github.com"` | URL de la API REST |
-| `github.graphql_url` | `"https://api.github.com/graphql"` | URL de la API GraphQL |
-| `github.repositoryUrl` | `"git://github.com/dukono/my-app.git"` | URL git del repo |
-| `github.workspace` | `"/home/runner/work/my-app/my-app"` | Directorio donde `actions/checkout` clona el repo |
-| `github.action` | `"__run"` | ID del step actual. En actions es el nombre de la action (`actions/checkout`) |
-| `github.action_path` | `"/home/runner/work/_actions/actions/checkout/v4"` | Ruta donde está instalada la action actual |
-| `github.action_ref` | `"v4"` | Versión/ref de la action actual |
-| `github.action_repository` | `"actions/checkout"` | Repositorio de la action actual |
-| `github.env` | `"/home/runner/work/_temp/set_env_abc"` | Path al archivo `$GITHUB_ENV` en el runner |
-| `github.output` | `"/home/runner/work/_temp/set_output_abc"` | Path al archivo `$GITHUB_OUTPUT` en el runner |
-| `github.path` | `"/home/runner/work/_temp/add_path_abc"` | Path al archivo `$GITHUB_PATH` en el runner |
-| `github.event_path` | `"/home/runner/work/_temp/event.json"` | Path al JSON completo del payload del evento |
-| `github.job_workflow_sha` | `"a1b2c3d4..."` | SHA del archivo del workflow para el job actual |
+```jsonc
+{
+  "action":               "__run",                    // ID del step. En una action: "actions/checkout"
+  "action_path":          "/home/runner/work/_actions/actions/checkout/v4", // ruta instalada de la action
+  "action_ref":           "v4",                       // versión/ref de la action actual
+  "action_repository":    "actions/checkout",         // repo de la action actual
+  "action_status":        "success",                  // estado de la action actual
+
+  "actor":                "dukono",                   // usuario que disparó el workflow
+  "actor_id":             "12345678",                 // ID numérico del usuario
+  "triggering_actor":     "dukono",                   // quien disparó ESTA ejecución — difiere de actor en re-runs
+
+  "token":                "ghs_xxxxxxxxxxxxxxxxxxxx", // token automático = secrets.GITHUB_TOKEN
+
+  "repository":           "dukono/my-app",            // owner/repo
+  "repository_id":        "987654321",
+  "repository_owner":     "dukono",
+  "repository_owner_id":  "12345678",
+  "repositoryUrl":        "git://github.com/dukono/my-app.git",
+
+  "ref":          "refs/heads/main",   // ref completa. En PR: refs/pull/11/merge (NO refs/heads/feature)
+  "ref_name":     "main",             // nombre corto: rama, tag, o "11/merge" si es PR
+  "ref_type":     "branch",           // "branch" o "tag"
+  "ref_protected": false,             // true si la rama tiene branch protection
+
+  "head_ref":     "feature/oauth",    // ⚠️ SOLO en pull_request — rama ORIGEN del PR
+  "base_ref":     "main",             // ⚠️ SOLO en pull_request — rama DESTINO del PR
+
+  "sha":          "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", // SHA del commit que disparó el evento
+
+  "event_name":   "push",             // nombre del evento: push, pull_request, release, schedule, ...
+  "event_path":   "/home/runner/work/_temp/_github_workflow/event.json", // ruta al JSON del payload
+
+  "workflow":     "CI Pipeline",      // campo name: del YAML del workflow
+  "workflow_ref": "dukono/my-app/.github/workflows/ci.yml@refs/heads/main",
+  "workflow_sha": "a1b2c3d4e5f6...",
+
+  "job":          "build",            // id: del job actual en el YAML
+
+  "run_id":       "9876543210",       // ID único global de esta ejecución
+  "run_number":   "42",               // número secuencial de ejecuciones de este workflow en el repo
+  "run_attempt":  "1",                // número de reintento — "2" si se pulsó re-run
+
+  "secret_source":    "Actions",      // origen de secrets: "Actions", "Dependabot", "None"
+  "retention_days":   "90",           // días que se guardan artifacts y logs
+
+  "server_url":   "https://github.com",
+  "api_url":      "https://api.github.com",
+  "graphql_url":  "https://api.github.com/graphql",
+
+  "workspace":    "/home/runner/work/my-app/my-app",  // directorio donde checkout clona el repo
+
+  // archivos especiales del runner (se usan con echo >> $GITHUB_ENV, etc.)
+  "env":          "/home/runner/work/_temp/_runner_file_commands/set_env_abc",
+  "output":       "/home/runner/work/_temp/_runner_file_commands/set_output_abc",
+  "path":         "/home/runner/work/_temp/_runner_file_commands/add_path_abc",
+
+  "job_workflow_sha": "a1b2c3d4e5f6..."
+}
+```
 
 </details>
 
 ---
 
-## `github.event` según el evento
+## `github.event` — campos comunes
 
-El campo `github.event` contiene el payload completo del webhook. Su estructura cambia según el evento.
-
----
-
-### Campos comunes a casi todos los eventos
-
-Estos objetos aparecen en el payload de **casi todos los eventos** (push, pull_request, issues, release, etc.). No se repiten en cada sección individual para no duplicar.
+Estos objetos aparecen en **casi todos los eventos**. No se repiten en cada sección individual.
 
 <details>
-<summary>Ver github.event.repository — el repositorio donde ocurrió el evento</summary>
+<summary>Ver github.event.repository</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.repository.id` | `987654321` | ID numérico del repo |
-| `github.event.repository.name` | `"my-app"` | Nombre del repo (sin el owner) |
-| `github.event.repository.full_name` | `"dukono/my-app"` | Nombre completo `owner/repo` |
-| `github.event.repository.private` | `false` | Si el repo es privado |
-| `github.event.repository.fork` | `false` | Si el repo es un fork |
-| `github.event.repository.archived` | `false` | Si el repo está archivado |
-| `github.event.repository.disabled` | `false` | Si el repo está deshabilitado |
-| `github.event.repository.visibility` | `"public"` | `"public"`, `"private"`, `"internal"` |
-| `github.event.repository.default_branch` | `"main"` | Rama principal |
-| `github.event.repository.description` | `"Mi aplicación"` | Descripción del repo (`null` si vacío) |
-| `github.event.repository.language` | `"TypeScript"` | Lenguaje principal detectado |
-| `github.event.repository.topics` | `["docker","ci"]` | Array de tópicos del repo |
-| `github.event.repository.homepage` | `"https://example.com"` | URL de la homepage (`null` si no tiene) |
-| `github.event.repository.size` | `1024` | Tamaño en KB |
-| `github.event.repository.stargazers_count` | `42` | Número de estrellas |
-| `github.event.repository.watchers_count` | `42` | Número de watchers |
-| `github.event.repository.forks_count` | `8` | Número de forks |
-| `github.event.repository.open_issues_count` | `5` | Issues abiertos |
-| `github.event.repository.allow_forking` | `true` | Si se permite hacer fork |
-| `github.event.repository.is_template` | `false` | Si el repo es una plantilla |
-| `github.event.repository.has_issues` | `true` | Si el repo tiene issues activos |
-| `github.event.repository.has_projects` | `true` | Si el repo tiene projects activos |
-| `github.event.repository.has_wiki` | `true` | Si el repo tiene wiki activo |
-| `github.event.repository.has_pages` | `false` | Si el repo tiene GitHub Pages activo |
-| `github.event.repository.has_downloads` | `true` | Si el repo tiene descargas activas |
-| `github.event.repository.has_discussions` | `false` | Si el repo tiene Discussions activo |
-| `github.event.repository.owner.login` | `"dukono"` | Username del propietario |
-| `github.event.repository.owner.id` | `12345678` | ID del propietario |
-| `github.event.repository.owner.type` | `"User"` | `"User"` u `"Organization"` |
-| `github.event.repository.owner.site_admin` | `false` | Si el propietario es admin de GitHub |
-| `github.event.repository.html_url` | `"https://github.com/dukono/my-app"` | URL web del repo |
-| `github.event.repository.clone_url` | `"https://github.com/dukono/my-app.git"` | URL HTTPS para clonar |
-| `github.event.repository.ssh_url` | `"git@github.com:dukono/my-app.git"` | URL SSH para clonar |
-| `github.event.repository.git_url` | `"git://github.com/dukono/my-app.git"` | URL git del repo |
-| `github.event.repository.svn_url` | `"https://github.com/dukono/my-app"` | URL SVN del repo |
-| `github.event.repository.url` | `"https://api.github.com/repos/dukono/my-app"` | URL de la API |
-| `github.event.repository.forks_url` | `"https://api.github.com/repos/dukono/my-app/forks"` | URL de la API de forks |
-| `github.event.repository.created_at` | `1609459200` | Timestamp Unix de creación (o ISO 8601 según el evento) |
-| `github.event.repository.updated_at` | `"2026-04-22T10:00:00Z"` | Última actualización |
-| `github.event.repository.pushed_at` | `"2026-04-22T10:30:00Z"` | Último push |
-| `github.event.repository.license` | `null` | Licencia del repo (`null` si no tiene) |
-| `github.event.repository.license.key` | `"mit"` | Clave de la licencia |
-| `github.event.repository.license.name` | `"MIT License"` | Nombre de la licencia |
+```jsonc
+{
+  "repository": {
+    "id":           987654321,
+    "name":         "my-app",               // solo el nombre, sin el owner
+    "full_name":      "dukono/my-app",        // owner/repo
+    "private":      false,
+    "fork":         false,                  // true si este repo es un fork de otro
+    "archived":     false,
+    "disabled":     false,
+    "visibility":   "public",              // "public", "private", "internal"
+    "default_branch": "main",
+    "description":  "Mi aplicación",       // null si vacío
+    "language":     "TypeScript",          // lenguaje principal detectado
+    "topics":       ["docker", "ci"],      // array de tópicos
+    "homepage":     "https://example.com", // null si no tiene
+
+    "size":               1024,            // en KB
+    "stargazers_count":   42,
+    "watchers_count":     42,
+    "forks_count":        8,
+    "open_issues_count":  5,
+
+    "allow_forking":  true,
+    "is_template":    false,
+    "has_issues":     true,
+    "has_projects":   true,
+    "has_wiki":       true,
+    "has_pages":      false,
+    "has_downloads":  true,
+    "has_discussions": false,
+
+    "owner": {
+      "login":      "dukono",
+      "id":         12345678,
+      "type":       "User",               // "User" u "Organization"
+      "site_admin": false
+    },
+
+    "html_url":   "https://github.com/dukono/my-app",
+    "clone_url":  "https://github.com/dukono/my-app.git",  // HTTPS
+    "ssh_url":    "git@github.com:dukono/my-app.git",
+    "git_url":    "git://github.com/dukono/my-app.git",
+    "svn_url":    "https://github.com/dukono/my-app",
+    "url":        "https://api.github.com/repos/dukono/my-app",
+
+    "license": {                           // null si no tiene licencia
+      "key":  "mit",
+      "name": "MIT License",
+      "url":  "https://api.github.com/licenses/mit"
+    },
+
+    "created_at": "2020-01-01T00:00:00Z",
+    "updated_at": "2026-04-22T10:00:00Z",
+    "pushed_at":  "2026-04-22T10:30:00Z"
+  }
+}
+```
 
 </details>
 
 <details>
-<summary>Ver github.event.sender — usuario que realizó la acción</summary>
+<summary>Ver github.event.sender</summary>
 
-El objeto `sender` está presente en casi todos los eventos e identifica al usuario (o bot) que realizó la acción que disparó el evento.
+Usuario o bot que realizó la acción que disparó el evento.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.sender.login` | `"dukono"` | Username |
-| `github.event.sender.id` | `12345678` | ID numérico |
-| `github.event.sender.type` | `"User"` | `"User"` o `"Bot"` |
-| `github.event.sender.site_admin` | `false` | Si es administrador de GitHub |
-| `github.event.sender.avatar_url` | `"https://avatars.githubusercontent.com/u/12345678"` | URL del avatar |
-| `github.event.sender.html_url` | `"https://github.com/dukono"` | URL del perfil |
-| `github.event.sender.url` | `"https://api.github.com/users/dukono"` | URL de la API del usuario |
+```jsonc
+{
+  "sender": {
+    "login":      "dukono",
+    "id":         12345678,
+    "type":       "User",                 // "User" o "Bot"
+    "site_admin": false,                  // true si es administrador de GitHub.com
+    "avatar_url": "https://avatars.githubusercontent.com/u/12345678",
+    "html_url":   "https://github.com/dukono",
+    "url":        "https://api.github.com/users/dukono"
+  }
+}
+```
 
-> `sender` y `github.actor` normalmente tienen el mismo valor, pero pueden diferir si una GitHub App actúa en nombre de un usuario.
+> `sender` y `github.actor` normalmente son iguales. Difieren si una GitHub App actúa en nombre de un usuario.
 
 </details>
 
 <details>
 <summary>Ver github.event.organization — solo en repos de organización</summary>
 
-Solo existe cuando el repo pertenece a una **organización** (no a un usuario personal).
+Solo existe cuando el repo pertenece a una **organización**.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.organization.login` | `"mi-empresa"` | Nombre de la organización |
-| `github.event.organization.id` | `99887766` | ID numérico de la organización |
-| `github.event.organization.description` | `"Empresa de software"` | Descripción (`null` si vacío) |
-| `github.event.organization.url` | `"https://api.github.com/orgs/mi-empresa"` | URL de la API |
-| `github.event.organization.repos_url` | `"https://api.github.com/orgs/mi-empresa/repos"` | URL de repos de la org |
-| `github.event.organization.events_url` | `"https://api.github.com/orgs/mi-empresa/events"` | URL de eventos de la org |
-| `github.event.organization.members_url` | `"https://api.github.com/orgs/mi-empresa/members{/member}"` | URL de miembros |
-| `github.event.organization.avatar_url` | `"https://avatars.githubusercontent.com/u/99887766"` | URL del avatar de la org |
-| `github.event.organization.hooks_url` | `"https://api.github.com/orgs/mi-empresa/hooks"` | URL de webhooks de la org |
+```jsonc
+{
+  "organization": {
+    "login":       "mi-empresa",
+    "id":          99887766,
+    "description": "Empresa de software",   // null si no tiene
+    "url":         "https://api.github.com/orgs/mi-empresa",
+    "repos_url":   "https://api.github.com/orgs/mi-empresa/repos",
+    "events_url":  "https://api.github.com/orgs/mi-empresa/events",
+    "members_url": "https://api.github.com/orgs/mi-empresa/members{/member}",
+    "avatar_url":  "https://avatars.githubusercontent.com/u/99887766"
+  }
+}
+```
 
 </details>
 
 <details>
 <summary>Ver github.event.installation — solo cuando lo dispara una GitHub App</summary>
 
-Solo existe cuando el evento es disparado por una **GitHub App instalada**, no por un usuario directo.
+Solo existe cuando el evento es disparado por una **GitHub App instalada**.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.installation.id` | `12345678` | ID de la instalación de la app |
-| `github.event.installation.node_id` | `"MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9u..."` | Node ID (para la API GraphQL) |
+```jsonc
+{
+  "installation": {
+    "id":      12345678,
+    "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9u..."
+  }
+}
+```
 
 </details>
+
+---
+
+## `github.event` — por evento
 
 ---
 
 ### `push`
 
 <details>
-<summary>Ver campos de github.event en push</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.ref` | `"refs/heads/main"` | Rama o tag que recibió el push |
-| `github.event.before` | `"83108f7a..."` | SHA del commit anterior (el HEAD antes del push) |
-| `github.event.after` | `"9cf3dea4..."` | SHA del commit nuevo (el HEAD después del push) |
-| `github.event.compare` | `"https://github.com/.../compare/83108f7...9cf3dea"` | URL para ver la diferencia en GitHub |
-| `github.event.created` | `false` | `true` si este push **creó** la rama |
-| `github.event.deleted` | `false` | `true` si este push **eliminó** la rama |
-| `github.event.forced` | `false` | `true` si fue un `git push --force` |
-| `github.event.pusher.name` | `"dukono"` | Username de quien hizo el push |
-| `github.event.pusher.email` | `"dukono@example.com"` | Email de quien hizo el push |
-| `github.event.commits` | `[...]` | Array con todos los commits incluidos en el push |
-| `github.event.commits[0].id` | `"a1b2c3d4..."` | SHA del commit |
-| `github.event.commits[0].message` | `"fix: bug en login"` | Mensaje del commit |
-| `github.event.commits[0].timestamp` | `"2026-04-22T10:30:00Z"` | Fecha y hora |
-| `github.event.commits[0].author.name` | `"Vitaly Neborachok"` | Nombre del autor |
-| `github.event.commits[0].author.email` | `"vitaly@example.com"` | Email del autor |
-| `github.event.commits[0].author.username` | `"dukono"` | Username de GitHub del autor |
-| `github.event.commits[0].url` | `"https://github.com/.../commit/a1b2c3d4"` | URL del commit en GitHub |
-| `github.event.commits[0].distinct` | `true` | `true` si el commit es nuevo (no estaba ya en el repo) |
-| `github.event.commits[0].added` | `["src/new.ts"]` | Archivos **añadidos** en este commit |
-| `github.event.commits[0].modified` | `["src/app.ts"]` | Archivos **modificados** en este commit |
-| `github.event.commits[0].removed` | `["src/old.ts"]` | Archivos **eliminados** en este commit |
-| `github.event.head_commit.id` | `"9cf3dea4..."` | SHA del último commit del push (el nuevo HEAD) |
-| `github.event.head_commit.message` | `"fix: bug en login"` | Mensaje del último commit |
-| `github.event.head_commit.author.name` | `"Vitaly Neborachok"` | Autor del último commit |
-| `github.event.head_commit.committer.name` | `"GitHub"` | Committer del último commit |
-| `github.event.repository.full_name` | `"dukono/my-app"` | Nombre completo del repo |
-| `github.event.repository.default_branch` | `"main"` | Rama principal del repo |
-| `github.event.repository.private` | `false` | Si el repo es privado |
-| `github.event.sender.login` | `"dukono"` | Usuario que hizo el push |
+```jsonc
+{
+  "ref":     "refs/heads/main",      // rama o tag que recibió el push
+  "before":  "83108f7a2e3b1c9d...", // SHA del HEAD antes del push
+  "after":   "9cf3dea4b5e8f1a2...", // SHA del HEAD después del push
+  "compare": "https://github.com/dukono/my-app/compare/83108f7...9cf3dea",
+  "created": false,                  // true si este push CREÓ la rama
+  "deleted": false,                  // true si este push ELIMINÓ la rama
+  "forced":  false,                  // true si fue git push --force
+  "base_ref": null,                  // rama base si el push es a un tag (normalmente null)
 
-> ⚠️ `before` y `after` **solo existen en `push`**. En `pull_request`, usa `github.event.pull_request.base.sha` y `github.event.pull_request.head.sha`.
+  "pusher": {
+    "name":  "dukono",
+    "email": "dukono@example.com"
+  },
+
+  "commits": [                       // array de todos los commits del push
+    {
+      "id":        "a1b2c3d4e5f6...",
+      "tree_id":   "b2c3d4e5f6a1...",
+      "distinct":  true,             // false si el commit ya existía en el repo (merge)
+      "message":   "fix: bug en login",
+      "timestamp": "2026-04-22T10:30:00+02:00",
+      "url":       "https://github.com/dukono/my-app/commit/a1b2c3d4",
+      "author": {
+        "name":     "Vitaly Neborachok",
+        "email":    "vitaly@example.com",
+        "username": "dukono"
+      },
+      "committer": {
+        "name":     "GitHub",
+        "email":    "noreply@github.com",
+        "username": "web-flow"
+      },
+      "added":    ["src/new-file.ts"],     // archivos añadidos en este commit
+      "removed":  ["src/old-file.ts"],     // archivos eliminados
+      "modified": ["src/app.ts", "README.md"]  // archivos modificados
+    }
+  ],
+
+  "head_commit": {                   // último commit del push (el nuevo HEAD)
+    "id":        "9cf3dea4b5e8f1a2...",
+    "message":   "fix: bug en login",
+    "timestamp": "2026-04-22T10:30:00+02:00",
+    "url":       "https://github.com/dukono/my-app/commit/9cf3dea4",
+    "author": {
+      "name":     "Vitaly Neborachok",
+      "email":    "vitaly@example.com",
+      "username": "dukono"
+    },
+    "committer": {
+      "name":     "GitHub",
+      "email":    "noreply@github.com",
+      "username": "web-flow"
+    },
+    "added":    [],
+    "removed":  [],
+    "modified": ["src/app.ts"]
+  }
+
+  // + repository, sender (ver sección "campos comunes")
+}
+```
+
+> ⚠️ `before` / `after` **solo existen en `push`**. En `pull_request` usa:
+> `github.event.pull_request.base.sha` y `github.event.pull_request.head.sha`
 
 </details>
 
@@ -265,18 +338,21 @@ Solo existe cuando el evento es disparado por una **GitHub App instalada**, no p
 ### `create`
 
 <details>
-<summary>Ver campos de github.event en create</summary>
+<summary>Ver JSON</summary>
 
-Se dispara cuando se **crea** una rama o un tag.
+Se dispara cuando se **crea** una rama o tag.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.ref` | `"feature/my-branch"` | Nombre de la rama o tag creado |
-| `github.event.ref_type` | `"branch"` | `"branch"` o `"tag"` |
-| `github.event.master_branch` | `"main"` | Rama principal del repo |
-| `github.event.pusher_type` | `"user"` | `"user"` o `"deploy_key"` |
-| `github.event.sender.login` | `"dukono"` | Usuario que creó la rama o tag |
-| `github.event.repository.full_name` | `"dukono/my-app"` | Nombre completo del repo |
+```jsonc
+{
+  "ref":           "feature/my-branch", // nombre de la rama o tag creado
+  "ref_type":      "branch",            // "branch" o "tag"
+  "master_branch": "main",              // rama principal del repo
+  "description":   null,
+  "pusher_type":   "user"               // "user" o "deploy_key"
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -285,88 +361,157 @@ Se dispara cuando se **crea** una rama o un tag.
 ### `delete`
 
 <details>
-<summary>Ver campos de github.event en delete</summary>
+<summary>Ver JSON</summary>
 
-Se dispara cuando se **elimina** una rama o un tag.
+Se dispara cuando se **elimina** una rama o tag.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.ref` | `"feature/old-branch"` | Nombre de la rama o tag eliminado |
-| `github.event.ref_type` | `"branch"` | `"branch"` o `"tag"` |
-| `github.event.pusher_type` | `"user"` | `"user"` o `"deploy_key"` |
-| `github.event.sender.login` | `"dukono"` | Usuario que eliminó la rama o tag |
+```jsonc
+{
+  "ref":         "feature/old-branch",  // nombre de la rama o tag eliminado
+  "ref_type":    "branch",              // "branch" o "tag"
+  "pusher_type": "user"                 // "user" o "deploy_key"
+
+  // + repository, sender
+}
+```
 
 </details>
 
 ---
 
-### `pull_request` y `pull_request_target`
+### `pull_request` / `pull_request_target`
 
-> **`pull_request`** ejecuta con el código de la **rama origen** (la rama del PR).
-> Sin acceso a `secrets` si el PR viene de un fork externo.
->
-> **`pull_request_target`** ejecuta con el código de la **rama base** (la rama destino, ej: `main`).
-> Tiene acceso a `secrets` aunque el PR sea de un fork externo. Usar con cuidado.
+> **`pull_request`** → ejecuta con el código de la **rama origen** — sin `secrets` si es un fork externo.
+> **`pull_request_target`** → ejecuta con el código de la **rama base** — con `secrets` aunque sea un fork.
 
 <details>
-<summary>Ver campos de github.event en pull_request</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"opened"` | Qué ocurrió: `opened`, `synchronize` (nuevo commit), `closed`, `reopened`, `labeled`, `unlabeled`, `assigned`, `unassigned`, `review_requested`, `review_request_removed`, `ready_for_review`, `converted_to_draft`, `auto_merge_enabled`, `auto_merge_disabled` |
-| `github.event.number` | `42` | Número del PR (igual que `pull_request.number`) |
-| `github.event.pull_request.number` | `42` | Número del PR |
-| `github.event.pull_request.title` | `"feat: OAuth"` | Título del PR |
-| `github.event.pull_request.body` | `"Descripción..."` | Cuerpo/descripción del PR (`null` si vacío) |
-| `github.event.pull_request.state` | `"open"` | `"open"` o `"closed"` |
-| `github.event.pull_request.draft` | `false` | `true` si el PR es un borrador |
-| `github.event.pull_request.locked` | `false` | `true` si el PR está bloqueado |
-| `github.event.pull_request.merged` | `false` | `true` si el PR ya fue mergeado |
-| `github.event.pull_request.mergeable` | `true` | `true`/`false`/`null` — `null` significa que GitHub aún lo está calculando |
-| `github.event.pull_request.mergeable_state` | `"clean"` | `clean`, `dirty` (conflictos), `unstable` (checks fallando), `blocked` (requiere aprobación), `behind` (rama desactualizada), `unknown` |
-| `github.event.pull_request.rebaseable` | `true` | Si se puede hacer rebase |
-| `github.event.pull_request.merged_by` | `null` | Objeto usuario que hizo merge (o `null` si no se ha mergeado) |
-| `github.event.pull_request.merged_by.login` | `"dukono"` | Username de quien mergeó |
-| `github.event.pull_request.user.login` | `"dukono"` | Autor del PR |
-| `github.event.pull_request.user.id` | `12345678` | ID del autor |
-| `github.event.pull_request.user.type` | `"User"` | `"User"` o `"Bot"` |
-| `github.event.pull_request.author_association` | `"OWNER"` | Relación del autor con el repo: `OWNER`, `MEMBER`, `COLLABORATOR`, `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, `FIRST_TIMER`, `NONE` |
-| `github.event.pull_request.head.ref` | `"feature/oauth"` | Nombre de la **rama origen** del PR |
-| `github.event.pull_request.head.sha` | `"a1b2c3d4..."` | SHA del commit más reciente de la rama origen |
-| `github.event.pull_request.head.label` | `"dukono:feature/oauth"` | `"usuario:rama"` — útil para identificar PRs de forks |
-| `github.event.pull_request.head.repo.full_name` | `"dukono/my-app"` | Repo de origen (distinto al base si es un fork) |
-| `github.event.pull_request.base.ref` | `"main"` | Nombre de la **rama destino** |
-| `github.event.pull_request.base.sha` | `"83108f7a..."` | SHA del commit de la rama destino |
-| `github.event.pull_request.base.label` | `"dukono:main"` | `"usuario:rama"` de la base |
-| `github.event.pull_request.base.repo.full_name` | `"dukono/my-app"` | Repo de destino |
-| `github.event.pull_request.labels` | `[{id, name, color, ...}]` | Array de etiquetas asignadas al PR |
-| `github.event.pull_request.assignees` | `[{login, id, ...}]` | Array de usuarios asignados |
-| `github.event.pull_request.requested_reviewers` | `[{login, id, ...}]` | Array de revisores solicitados |
-| `github.event.pull_request.requested_teams` | `[{id, name, slug}]` | Array de equipos revisores solicitados |
-| `github.event.pull_request.milestone` | `null` | Milestone asignado (o `null`) |
-| `github.event.pull_request.milestone.title` | `"v2.0.0"` | Título del milestone |
-| `github.event.pull_request.changed_files` | `7` | **Número entero** de archivos cambiados — no es una lista |
-| `github.event.pull_request.additions` | `142` | Líneas añadidas |
-| `github.event.pull_request.deletions` | `38` | Líneas eliminadas |
-| `github.event.pull_request.commits` | `3` | Número de commits |
-| `github.event.pull_request.review_comments` | `2` | Comentarios inline en revisiones |
-| `github.event.pull_request.comments` | `1` | Comentarios generales |
-| `github.event.pull_request.auto_merge` | `null` | `null` si no está activo |
-| `github.event.pull_request.auto_merge.enabled_by.login` | `"dukono"` | Quien activó el auto-merge |
-| `github.event.pull_request.auto_merge.merge_method` | `"squash"` | Método: `merge`, `squash`, `rebase` |
-| `github.event.pull_request.html_url` | `"https://github.com/.../pull/42"` | URL web del PR |
-| `github.event.pull_request.diff_url` | `"https://github.com/.../pull/42.diff"` | URL del diff en texto plano |
-| `github.event.pull_request.patch_url` | `"https://github.com/.../pull/42.patch"` | URL del patch |
-| `github.event.pull_request.issue_url` | `"https://api.github.com/.../issues/42"` | URL del issue asociado (un PR es un issue) |
-| `github.event.pull_request.commits_url` | `"https://api.github.com/.../pulls/42/commits"` | URL de la API para listar commits |
-| `github.event.pull_request.review_comments_url` | `"https://api.github.com/.../pulls/42/comments"` | URL de la API para listar comentarios inline |
-| `github.event.pull_request.created_at` | `"2026-04-20T09:00:00Z"` | Fecha de creación |
-| `github.event.pull_request.updated_at` | `"2026-04-22T10:30:00Z"` | Fecha de última actualización |
-| `github.event.pull_request.closed_at` | `null` | Fecha de cierre (`null` si está abierto) |
-| `github.event.pull_request.merged_at` | `null` | Fecha de merge (`null` si no se ha mergeado) |
-| `github.event.sender.login` | `"dukono"` | Usuario que disparó el evento |
+```jsonc
+{
+  // qué acción ocurrió:
+  // opened | synchronize | closed | reopened
+  // labeled | unlabeled | assigned | unassigned
+  // review_requested | review_request_removed
+  // ready_for_review | converted_to_draft
+  // auto_merge_enabled | auto_merge_disabled
+  "action": "opened",
 
-> **`changed_files` no es una lista de archivos** — solo el contador. Para obtener la lista necesitas la API o una action como `tj-actions/changed-files`.
+  "number": 42,             // número del PR (igual que pull_request.number)
+
+  "pull_request": {
+    "id":     1234567890,
+    "number": 42,
+    "title":  "feat: añadir autenticación OAuth",
+    "body":   "Descripción del PR...\n\nCierres #99",  // null si vacío
+
+    "state":  "open",       // "open" o "closed"
+    "locked": false,
+    "draft":  false,        // true si es borrador
+
+    "merged":           false,   // true si ya se mergeó
+    "mergeable":        true,    // true | false | null (null = GitHub aún calculando)
+    "rebaseable":       true,
+    "mergeable_state":  "clean", // clean | dirty(conflictos) | unstable(checks) | blocked | behind | unknown
+    "merge_commit_sha": null,    // SHA del merge commit (null si no mergeado)
+    "merged_by":        null,    // objeto usuario que mergeó, o null
+
+    "auto_merge": null,          // null si no está activo. Si activo:
+    // "auto_merge": {
+    //   "enabled_by":     { "login": "dukono" },
+    //   "merge_method":   "squash",   // merge | squash | rebase
+    //   "commit_title":   "feat: añadir autenticación OAuth (#42)",
+    //   "commit_message": ""
+    // }
+
+    "user": {
+      "login":      "dukono",
+      "id":         12345678,
+      "type":       "User",     // "User" o "Bot"
+      "site_admin": false
+    },
+
+    // OWNER | MEMBER | COLLABORATOR | CONTRIBUTOR | FIRST_TIME_CONTRIBUTOR | FIRST_TIMER | NONE
+    "author_association": "OWNER",
+
+    "head": {                   // rama ORIGEN del PR
+      "label": "dukono:feature/oauth",  // "usuario:rama" — útil para PRs de forks
+      "ref":   "feature/oauth",
+      "sha":   "a1b2c3d4e5f6...",
+      "repo": {
+        "id":             987654321,
+        "full_name":      "dukono/my-app",
+        "private":        false,
+        "default_branch": "main"
+      }
+    },
+
+    "base": {                   // rama DESTINO del PR
+      "label": "dukono:main",
+      "ref":   "main",
+      "sha":   "83108f7a2e3b...",
+      "repo": {
+        "id":             987654321,
+        "full_name":      "dukono/my-app",
+        "private":        false,
+        "default_branch": "main"
+      }
+    },
+
+    "labels": [                 // array de etiquetas
+      {
+        "id":          123456,
+        "name":        "bug",
+        "color":       "d73a4a",
+        "description": "Something is not working",
+        "default":     true     // true si es etiqueta por defecto de GitHub
+      }
+    ],
+
+    "assignees": [              // array de usuarios asignados
+      { "login": "user1", "id": 11111111, "type": "User" }
+    ],
+
+    "requested_reviewers": [    // array de revisores individuales solicitados
+      { "login": "reviewer1", "id": 22222222, "type": "User" }
+    ],
+
+    "requested_teams": [        // array de equipos revisores solicitados
+      { "id": 999, "name": "backend-team", "slug": "backend-team" }
+    ],
+
+    "milestone": null,          // null si no tiene. Si tiene:
+    // "milestone": { "id": 5678901, "number": 3, "title": "v2.0.0", "state": "open" }
+
+    // estadísticas — TODOS son enteros, NO listas
+    "changed_files":    7,     // ⚠️ número de archivos, no la lista
+    "additions":        142,
+    "deletions":        38,
+    "commits":          3,
+    "review_comments":  2,     // comentarios inline en revisiones
+    "comments":         1,     // comentarios generales
+
+    // URLs
+    "html_url":             "https://github.com/dukono/my-app/pull/42",
+    "diff_url":             "https://github.com/dukono/my-app/pull/42.diff",
+    "patch_url":            "https://github.com/dukono/my-app/pull/42.patch",
+    "issue_url":            "https://api.github.com/repos/dukono/my-app/issues/42",
+    "commits_url":          "https://api.github.com/repos/dukono/my-app/pulls/42/commits",
+    "review_comments_url":  "https://api.github.com/repos/dukono/my-app/pulls/42/comments",
+    "url":                  "https://api.github.com/repos/dukono/my-app/pulls/42",
+
+    // fechas
+    "created_at": "2026-04-20T09:00:00Z",
+    "updated_at": "2026-04-22T10:30:00Z",
+    "closed_at":  null,   // null si está abierto
+    "merged_at":  null    // null si no se ha mergeado
+  }
+
+  // + repository, sender
+}
+```
+
+> `changed_files` es un **entero** (contador). Para obtener la lista de archivos modificados necesitas la API o una action como `tj-actions/changed-files`.
 
 </details>
 
@@ -375,28 +520,49 @@ Se dispara cuando se **elimina** una rama o un tag.
 ### `pull_request_review`
 
 <details>
-<summary>Ver campos de github.event en pull_request_review</summary>
+<summary>Ver JSON</summary>
 
-Se dispara cuando alguien **envía una revisión** en un PR (aprueba, pide cambios o comenta).
+Se dispara cuando alguien **envía una revisión** (aprueba, pide cambios o comenta).
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"submitted"` | `"submitted"`, `"edited"`, `"dismissed"` |
-| `github.event.review.id` | `987654321` | ID de la revisión |
-| `github.event.review.state` | `"approved"` | `"approved"`, `"changes_requested"`, `"commented"` |
-| `github.event.review.body` | `"LGTM 👍"` | Comentario de la revisión (`null` si no hay texto) |
-| `github.event.review.commit_id` | `"a1b2c3d4..."` | SHA del commit que se revisó |
-| `github.event.review.submitted_at` | `"2026-04-22T10:00:00Z"` | Fecha de envío |
-| `github.event.review.user.login` | `"reviewer1"` | Username del revisor |
-| `github.event.review.user.id` | `22222222` | ID del revisor |
-| `github.event.review.author_association` | `"MEMBER"` | Relación del revisor con el repo |
-| `github.event.review.html_url` | `"https://github.com/.../pull/42#pullrequestreview-987654321"` | URL de la revisión |
-| `github.event.pull_request.number` | `42` | Número del PR revisado |
-| `github.event.pull_request.title` | `"feat: OAuth"` | Título del PR |
-| `github.event.pull_request.state` | `"open"` | Estado del PR |
-| `github.event.pull_request.user.login` | `"dukono"` | Autor del PR |
-| `github.event.pull_request.head.ref` | `"feature/oauth"` | Rama origen del PR |
-| `github.event.pull_request.base.ref` | `"main"` | Rama destino del PR |
+```jsonc
+{
+  // "submitted" | "edited" | "dismissed"
+  "action": "submitted",
+
+  "review": {
+    "id":    987654321,
+    "state": "approved",   // "approved" | "changes_requested" | "commented"
+    "body":  "LGTM 👍",    // null si no hay texto
+
+    "commit_id":    "a1b2c3d4...",  // SHA del commit revisado
+    "submitted_at": "2026-04-22T10:00:00Z",
+
+    // OWNER | MEMBER | COLLABORATOR | CONTRIBUTOR | FIRST_TIME_CONTRIBUTOR | NONE
+    "author_association": "MEMBER",
+
+    "user": {
+      "login": "reviewer1",
+      "id":    22222222,
+      "type":  "User"
+    },
+
+    "html_url":          "https://github.com/dukono/my-app/pull/42#pullrequestreview-987654321",
+    "pull_request_url":  "https://api.github.com/repos/dukono/my-app/pulls/42"
+  },
+
+  "pull_request": {
+    "number": 42,
+    "title":  "feat: añadir autenticación OAuth",
+    "state":  "open",
+    "draft":  false,
+    "user":   { "login": "dukono", "id": 12345678 },
+    "head":   { "ref": "feature/oauth", "sha": "a1b2c3d4..." },
+    "base":   { "ref": "main",          "sha": "83108f7a..." }
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -405,28 +571,56 @@ Se dispara cuando alguien **envía una revisión** en un PR (aprueba, pide cambi
 ### `pull_request_review_comment`
 
 <details>
-<summary>Ver campos de github.event en pull_request_review_comment</summary>
+<summary>Ver JSON</summary>
 
-Se dispara cuando se añade un **comentario inline** sobre una línea de código específica del PR.
+Se dispara cuando se añade un **comentario inline** sobre una línea de código del PR.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"created"` | `"created"`, `"edited"`, `"deleted"` |
-| `github.event.comment.id` | `111222333` | ID del comentario |
-| `github.event.comment.body` | `"¿Por qué usas var aquí?"` | Texto del comentario |
-| `github.event.comment.path` | `"src/auth/login.ts"` | Archivo donde se hizo el comentario |
-| `github.event.comment.line` | `42` | Línea del archivo donde está el comentario |
-| `github.event.comment.original_line` | `40` | Línea original antes de rebase/force push |
-| `github.event.comment.side` | `"RIGHT"` | `"RIGHT"` = línea nueva, `"LEFT"` = línea eliminada |
-| `github.event.comment.diff_hunk` | `"@@ -38,6 +40,8 @@..."` | Fragmento del diff donde está el comentario |
-| `github.event.comment.pull_request_review_id` | `987654321` | ID de la revisión a la que pertenece |
-| `github.event.comment.user.login` | `"reviewer1"` | Autor del comentario |
-| `github.event.comment.user.id` | `22222222` | ID del autor |
-| `github.event.comment.author_association` | `"MEMBER"` | Relación del autor con el repo |
-| `github.event.comment.created_at` | `"2026-04-22T09:30:00Z"` | Fecha de creación |
-| `github.event.comment.html_url` | `"https://github.com/.../pull/42#discussion_r111222333"` | URL del comentario |
-| `github.event.pull_request.number` | `42` | Número del PR revisado |
-| `github.event.pull_request.head.ref` | `"feature/oauth"` | Rama origen del PR |
+```jsonc
+{
+  // "created" | "edited" | "deleted"
+  "action": "created",
+
+  "comment": {
+    "id":   111222333,
+    "body": "¿Por qué usas var aquí?",
+
+    "path":          "src/auth/login.ts",    // archivo comentado
+    "line":          42,                      // línea actual
+    "original_line": 40,                      // línea antes de rebase/force push
+    "position":      5,                       // posición en el diff
+    "side":          "RIGHT",  // "RIGHT" = línea nueva, "LEFT" = línea eliminada
+
+    "diff_hunk": "@@ -38,6 +40,8 @@\n   const user = getUser();\n+  const token = ...",
+
+    "commit_id":            "a1b2c3d4e5f6...",
+    "original_commit_id":   "a1b2c3d4e5f6...",
+    "pull_request_review_id": 987654321,
+
+    "author_association": "MEMBER",
+
+    "user": {
+      "login": "reviewer1",
+      "id":    22222222,
+      "type":  "User"
+    },
+
+    "created_at": "2026-04-22T09:30:00Z",
+    "updated_at": "2026-04-22T09:30:00Z",
+    "html_url":   "https://github.com/dukono/my-app/pull/42#discussion_r111222333",
+    "url":        "https://api.github.com/repos/dukono/my-app/pulls/comments/111222333"
+  },
+
+  "pull_request": {
+    "number": 42,
+    "title":  "feat: añadir autenticación OAuth",
+    "state":  "open",
+    "head":   { "ref": "feature/oauth", "sha": "a1b2c3d4..." },
+    "base":   { "ref": "main" }
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -435,31 +629,72 @@ Se dispara cuando se añade un **comentario inline** sobre una línea de código
 ### `issues`
 
 <details>
-<summary>Ver campos de github.event en issues</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"opened"` | Qué ocurrió: `opened`, `closed`, `edited`, `reopened`, `labeled`, `unlabeled`, `assigned`, `unassigned`, `milestoned`, `demilestoned`, `locked`, `unlocked`, `transferred`, `pinned`, `unpinned`, `deleted` |
-| `github.event.issue.number` | `99` | Número del issue |
-| `github.event.issue.title` | `"Bug en login"` | Título |
-| `github.event.issue.body` | `"Pasos para reproducir..."` | Descripción (`null` si vacío) |
-| `github.event.issue.state` | `"open"` | `"open"` o `"closed"` |
-| `github.event.issue.state_reason` | `"completed"` | Por qué se cerró: `"completed"`, `"not_planned"`, `"reopened"`, `null` |
-| `github.event.issue.locked` | `false` | Si el issue está bloqueado |
-| `github.event.issue.user.login` | `"dukono"` | Autor del issue |
-| `github.event.issue.author_association` | `"OWNER"` | Relación del autor con el repo |
-| `github.event.issue.labels` | `[{id, name, color}]` | Array de etiquetas |
-| `github.event.issue.assignees` | `[{login, id}]` | Array de usuarios asignados |
-| `github.event.issue.milestone` | `null` | Milestone asignado (o `null`) |
-| `github.event.issue.milestone.title` | `"v2.0.0"` | Título del milestone |
-| `github.event.issue.comments` | `5` | Número de comentarios |
-| `github.event.issue.created_at` | `"2026-04-18T08:00:00Z"` | Fecha de creación |
-| `github.event.issue.updated_at` | `"2026-04-22T10:00:00Z"` | Última actualización |
-| `github.event.issue.closed_at` | `null` | Fecha de cierre (`null` si está abierto) |
-| `github.event.issue.html_url` | `"https://github.com/.../issues/99"` | URL del issue |
-| `github.event.label.name` | `"bug"` | ⚠️ Solo cuando `action == "labeled"` o `"unlabeled"` — la etiqueta que se añadió/quitó |
-| `github.event.assignee.login` | `"user1"` | ⚠️ Solo cuando `action == "assigned"` o `"unassigned"` — el usuario asignado/desasignado |
-| `github.event.sender.login` | `"dukono"` | Usuario que realizó la acción |
+```jsonc
+{
+  // opened | closed | edited | reopened
+  // labeled | unlabeled | assigned | unassigned
+  // milestoned | demilestoned | locked | unlocked
+  // transferred | pinned | unpinned | deleted
+  "action": "opened",
+
+  "issue": {
+    "id":     2345678901,
+    "number": 99,
+    "title":  "Bug en login",
+    "body":   "Pasos para reproducir:\n1. Abrir Firefox\n2. Ir a /login...", // null si vacío
+
+    "state":        "open",       // "open" o "closed"
+    "state_reason": null,         // "completed" | "not_planned" | "reopened" | null
+    "locked":       false,
+
+    "author_association": "OWNER", // OWNER | MEMBER | COLLABORATOR | CONTRIBUTOR | NONE
+
+    "user": {
+      "login":      "dukono",
+      "id":         12345678,
+      "type":       "User",
+      "site_admin": false
+    },
+
+    "labels": [
+      {
+        "id":          123456,
+        "name":        "bug",
+        "color":       "d73a4a",
+        "description": "Something is not working",
+        "default":     true
+      }
+    ],
+
+    "assignees": [
+      { "login": "user1", "id": 11111111, "type": "User" }
+    ],
+
+    "milestone": null,   // null si no tiene. Si tiene:
+    // "milestone": {
+    //   "id": 5678901, "number": 3, "title": "v2.0.0",
+    //   "state": "open", "due_on": "2026-06-01T00:00:00Z"
+    // }
+
+    "comments":   0,
+    "created_at": "2026-04-18T08:00:00Z",
+    "updated_at": "2026-04-22T10:00:00Z",
+    "closed_at":  null,
+    "html_url":   "https://github.com/dukono/my-app/issues/99",
+    "url":        "https://api.github.com/repos/dukono/my-app/issues/99"
+  },
+
+  // ⚠️ Solo cuando action == "labeled" o "unlabeled":
+  "label": { "id": 123456, "name": "bug", "color": "d73a4a" },
+
+  // ⚠️ Solo cuando action == "assigned" o "unassigned":
+  "assignee": { "login": "user1", "id": 11111111 }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -468,25 +703,49 @@ Se dispara cuando se añade un **comentario inline** sobre una línea de código
 ### `issue_comment`
 
 <details>
-<summary>Ver campos de github.event en issue_comment</summary>
+<summary>Ver JSON</summary>
 
-Se dispara en comentarios de **issues y también en PRs** (un PR internamente es un issue).
+Se dispara en comentarios de **issues y también de PRs** (internamente un PR es un issue).
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"created"` | `"created"`, `"edited"`, `"deleted"` |
-| `github.event.issue.number` | `99` | Número del issue o PR donde se comentó |
-| `github.event.issue.title` | `"Bug en login"` | Título del issue o PR |
-| `github.event.issue.state` | `"open"` | Estado del issue o PR |
-| `github.event.issue.pull_request` | `null` | Si el issue **es** un PR, este campo existe y tiene `html_url`. Si es un issue normal, es `null` |
-| `github.event.issue.pull_request.html_url` | `"https://github.com/.../pull/42"` | URL del PR (solo si es un PR) |
-| `github.event.comment.id` | `555666777` | ID del comentario |
-| `github.event.comment.body` | `"He podido reproducirlo"` | Texto del comentario |
-| `github.event.comment.user.login` | `"contributor1"` | Autor del comentario |
-| `github.event.comment.author_association` | `"CONTRIBUTOR"` | Relación del autor con el repo |
-| `github.event.comment.created_at` | `"2026-04-22T10:15:00Z"` | Fecha de creación |
-| `github.event.comment.updated_at` | `"2026-04-22T10:15:00Z"` | Fecha de edición |
-| `github.event.comment.html_url` | `"https://github.com/.../issues/99#issuecomment-555666777"` | URL del comentario |
+```jsonc
+{
+  // "created" | "edited" | "deleted"
+  "action": "created",
+
+  "issue": {
+    "number": 99,
+    "title":  "Bug en login",
+    "state":  "open",
+    "user":   { "login": "dukono", "id": 12345678 },
+    "labels": [{ "name": "bug", "color": "d73a4a" }],
+
+    // ⚠️ Si el issue ES un PR, este campo existe con la URL del PR.
+    //    Si es un issue normal, es null.
+    "pull_request": null
+    // "pull_request": { "html_url": "https://github.com/dukono/my-app/pull/42" }
+  },
+
+  "comment": {
+    "id":   555666777,
+    "body": "He podido reproducirlo también en Chrome",
+
+    "author_association": "CONTRIBUTOR",
+
+    "user": {
+      "login": "contributor1",
+      "id":    33333333,
+      "type":  "User"
+    },
+
+    "created_at": "2026-04-22T10:15:00Z",
+    "updated_at": "2026-04-22T10:15:00Z",
+    "html_url":   "https://github.com/dukono/my-app/issues/99#issuecomment-555666777",
+    "url":        "https://api.github.com/repos/dukono/my-app/issues/comments/555666777"
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -495,23 +754,50 @@ Se dispara en comentarios de **issues y también en PRs** (un PR internamente es
 ### `discussion`
 
 <details>
-<summary>Ver campos de github.event en discussion</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"created"` | `created`, `edited`, `deleted`, `pinned`, `unpinned`, `locked`, `unlocked`, `transferred`, `answered`, `unanswered`, `labeled`, `unlabeled`, `category_changed` |
-| `github.event.discussion.number` | `15` | Número de la discusión |
-| `github.event.discussion.title` | `"¿Cómo usar caché?"` | Título |
-| `github.event.discussion.body` | `"Tengo problemas..."` | Contenido |
-| `github.event.discussion.state` | `"open"` | `"open"`, `"closed"`, `"locked"` |
-| `github.event.discussion.answer_html_url` | `null` | URL de la respuesta marcada como solución (o `null` si no hay) |
-| `github.event.discussion.category.name` | `"Q&A"` | Nombre de la categoría: `"Q&A"`, `"Ideas"`, `"General"`, `"Show and tell"`, ... |
-| `github.event.discussion.category.slug` | `"q-a"` | Slug de la categoría |
-| `github.event.discussion.category.is_answerable` | `true` | `true` si permite marcar una respuesta como solución (solo Q&A) |
-| `github.event.discussion.user.login` | `"dukono"` | Autor de la discusión |
-| `github.event.discussion.labels` | `[{name, color}]` | Etiquetas |
-| `github.event.discussion.created_at` | `"2026-04-20T08:00:00Z"` | Fecha de creación |
-| `github.event.discussion.html_url` | `"https://github.com/.../discussions/15"` | URL de la discusión |
+```jsonc
+{
+  // created | edited | deleted | pinned | unpinned | locked | unlocked
+  // transferred | answered | unanswered | labeled | unlabeled | category_changed
+  "action": "created",
+
+  "discussion": {
+    "id":     3456789012,
+    "number": 15,
+    "title":  "¿Cómo usar caché?",
+    "body":   "Tengo problemas configurando...",
+
+    "state":            "open",   // "open" | "closed" | "locked"
+    "answer_html_url":  null,     // URL de la respuesta marcada como solución (null si no hay)
+
+    "category": {
+      "id":           12345,
+      "name":         "Q&A",         // "Q&A" | "Ideas" | "General" | "Show and tell" | ...
+      "slug":         "q-a",
+      "emoji":        ":grey_question:",
+      "description":  "Ask the community for help",
+      "is_answerable": true          // true = permite marcar una respuesta como solución
+    },
+
+    "user": {
+      "login": "dukono",
+      "id":    12345678,
+      "type":  "User"
+    },
+
+    "labels": [
+      { "id": 789, "name": "question", "color": "cc317c" }
+    ],
+
+    "created_at": "2026-04-20T08:00:00Z",
+    "updated_at": "2026-04-22T10:00:00Z",
+    "html_url":   "https://github.com/dukono/my-app/discussions/15"
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -520,21 +806,44 @@ Se dispara en comentarios de **issues y también en PRs** (un PR internamente es
 ### `discussion_comment`
 
 <details>
-<summary>Ver campos de github.event en discussion_comment</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"created"` | `"created"`, `"edited"`, `"deleted"` |
-| `github.event.comment.id` | `777888999` | ID del comentario |
-| `github.event.comment.body` | `"Puedes usar actions/cache..."` | Texto del comentario |
-| `github.event.comment.parent_id` | `null` | `null` si es un comentario raíz. Si es una respuesta, tiene el ID del comentario padre |
-| `github.event.comment.user.login` | `"contributor1"` | Autor |
-| `github.event.comment.author_association` | `"CONTRIBUTOR"` | Relación con el repo |
-| `github.event.comment.created_at` | `"2026-04-22T09:00:00Z"` | Fecha |
-| `github.event.comment.html_url` | `"https://github.com/.../discussions/15#discussioncomment-777888999"` | URL |
-| `github.event.discussion.number` | `15` | Número de la discusión donde se comentó |
-| `github.event.discussion.title` | `"¿Cómo usar caché?"` | Título de la discusión |
-| `github.event.discussion.category.name` | `"Q&A"` | Categoría |
+```jsonc
+{
+  // "created" | "edited" | "deleted"
+  "action": "created",
+
+  "comment": {
+    "id":        777888999,
+    "body":      "Puedes usar actions/cache con esta key...",
+    "parent_id": null,    // null si es comentario raíz. ID del padre si es una respuesta.
+
+    "author_association": "CONTRIBUTOR",
+
+    "user": {
+      "login": "contributor1",
+      "id":    33333333,
+      "type":  "User"
+    },
+
+    "created_at": "2026-04-22T09:00:00Z",
+    "updated_at": "2026-04-22T09:00:00Z",
+    "html_url":   "https://github.com/dukono/my-app/discussions/15#discussioncomment-777888999"
+  },
+
+  "discussion": {
+    "number": 15,
+    "title":  "¿Cómo usar caché?",
+    "state":  "open",
+    "category": {
+      "name":          "Q&A",
+      "is_answerable": true
+    }
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -543,29 +852,58 @@ Se dispara en comentarios de **issues y también en PRs** (un PR internamente es
 ### `release`
 
 <details>
-<summary>Ver campos de github.event en release</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"published"` | `published`, `created`, `edited`, `deleted`, `prereleased`, `released`, `unpublished`. El más usado en CI/CD es `published` |
-| `github.event.release.tag_name` | `"v1.2.0"` | Tag de la release |
-| `github.event.release.name` | `"Release 1.2.0"` | Nombre/título de la release (`null` si no tiene) |
-| `github.event.release.body` | `"## Cambios\n- feat: OAuth"` | Release notes (`null` si vacío) |
-| `github.event.release.draft` | `false` | `true` si es un borrador (no publicado aún) |
-| `github.event.release.prerelease` | `false` | `true` si está marcado como pre-release |
-| `github.event.release.target_commitish` | `"main"` | Rama o SHA desde donde se creó la release |
-| `github.event.release.author.login` | `"dukono"` | Usuario que creó la release |
-| `github.event.release.assets` | `[...]` | Array de archivos adjuntos a la release |
-| `github.event.release.assets[0].name` | `"my-app-linux-amd64"` | Nombre del archivo |
-| `github.event.release.assets[0].size` | `15728640` | Tamaño en bytes |
-| `github.event.release.assets[0].download_count` | `42` | Número de descargas |
-| `github.event.release.assets[0].browser_download_url` | `"https://github.com/.../releases/download/v1.2.0/my-app-linux-amd64"` | URL de descarga |
-| `github.event.release.html_url` | `"https://github.com/.../releases/tag/v1.2.0"` | URL web de la release |
-| `github.event.release.upload_url` | `"https://uploads.github.com/.../assets{?name,label}"` | URL para subir assets a la release via API |
-| `github.event.release.tarball_url` | `"https://api.github.com/.../tarball/v1.2.0"` | URL del tarball del código fuente |
-| `github.event.release.zipball_url` | `"https://api.github.com/.../zipball/v1.2.0"` | URL del zip del código fuente |
-| `github.event.release.created_at` | `"2026-04-22T10:00:00Z"` | Fecha de creación |
-| `github.event.release.published_at` | `"2026-04-22T10:05:00Z"` | Fecha de publicación (`null` si es borrador) |
+```jsonc
+{
+  // published | created | edited | deleted | prereleased | released | unpublished
+  // El más usado en CI/CD es "published"
+  "action": "published",
+
+  "release": {
+    "id":          123456789,
+    "tag_name":    "v1.2.0",
+    "name":        "Release 1.2.0 — Nuevas características",  // null si no tiene nombre
+    "body":        "## Cambios\n\n### Features\n- feat: OAuth\n\n### Fixes\n- fix: login",
+    "draft":       false,    // true si es borrador (no publicado)
+    "prerelease":  false,    // true si está marcado como pre-release
+
+    "target_commitish": "main",   // rama o SHA desde donde se creó la release
+
+    "author": {
+      "login": "dukono",
+      "id":    12345678,
+      "type":  "User"
+    },
+
+    "assets": [             // archivos adjuntos a la release
+      {
+        "id":           9876543,
+        "name":         "my-app-linux-amd64",
+        "label":        "",
+        "state":        "uploaded",
+        "content_type": "application/octet-stream",
+        "size":         15728640,       // bytes
+        "download_count": 42,
+        "browser_download_url": "https://github.com/dukono/my-app/releases/download/v1.2.0/my-app-linux-amd64",
+        "created_at": "2026-04-22T10:05:00Z",
+        "updated_at": "2026-04-22T10:05:00Z"
+      }
+    ],
+
+    "html_url":     "https://github.com/dukono/my-app/releases/tag/v1.2.0",
+    "upload_url":   "https://uploads.github.com/repos/dukono/my-app/releases/123456789/assets{?name,label}",
+    "tarball_url":  "https://api.github.com/repos/dukono/my-app/tarball/v1.2.0",
+    "zipball_url":  "https://api.github.com/repos/dukono/my-app/zipball/v1.2.0",
+    "url":          "https://api.github.com/repos/dukono/my-app/releases/123456789",
+
+    "created_at":   "2026-04-22T10:00:00Z",
+    "published_at": "2026-04-22T10:05:00Z"  // null si es borrador
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -574,24 +912,60 @@ Se dispara en comentarios de **issues y también en PRs** (un PR internamente es
 ### `registry_package`
 
 <details>
-<summary>Ver campos de github.event en registry_package</summary>
+<summary>Ver JSON</summary>
 
 Se dispara cuando se publica o actualiza un paquete en **GitHub Packages**.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"published"` | `"published"` o `"updated"` |
-| `github.event.package.name` | `"my-app"` | Nombre del paquete |
-| `github.event.package.package_type` | `"container"` | Tipo: `container`, `npm`, `maven`, `rubygems`, `docker`, `nuget` |
-| `github.event.package.html_url` | `"https://github.com/.../pkgs/container/my-app"` | URL del paquete en GitHub |
-| `github.event.package.owner.login` | `"dukono"` | Propietario del paquete |
-| `github.event.package.package_version.version` | `"1.2.0"` | Versión publicada |
-| `github.event.package.package_version.name` | `"1.2.0"` | Nombre de la versión |
-| `github.event.package.package_version.target_commitish` | `"main"` | Rama asociada a esta versión |
-| `github.event.package.package_version.target_oid` | `"a1b2c3d4..."` | SHA del commit asociado |
-| `github.event.package.package_version.container_metadata.tags` | `["latest", "1.2.0", "1.2"]` | Tags del contenedor (solo si es container) |
-| `github.event.package.package_version.container_metadata.manifest.digest` | `"sha256:037fb5af..."` | Digest del manifiesto del contenedor |
-| `github.event.package.package_version.html_url` | `"https://github.com/.../pkgs/container/my-app/111222"` | URL de esta versión |
+```jsonc
+{
+  // "published" | "updated"
+  "action": "published",
+
+  "package": {
+    "id":           456789,
+    "name":         "my-app",
+
+    // "container" | "npm" | "maven" | "rubygems" | "docker" | "nuget"
+    "package_type": "container",
+
+    "html_url":   "https://github.com/dukono/my-app/pkgs/container/my-app",
+    "created_at": "2026-04-22T10:00:00Z",
+    "updated_at": "2026-04-22T10:00:00Z",
+
+    "owner": {
+      "login": "dukono",
+      "id":    12345678
+    },
+
+    "package_version": {
+      "id":      111222,
+      "version": "1.2.0",
+      "name":    "1.2.0",
+
+      "target_commitish": "main",               // rama asociada
+      "target_oid":       "a1b2c3d4e5f6...",    // SHA del commit asociado
+
+      "html_url":   "https://github.com/dukono/my-app/pkgs/container/my-app/111222",
+      "created_at": "2026-04-22T10:00:00Z",
+      "updated_at": "2026-04-22T10:00:00Z",
+
+      "container_metadata": {              // solo si package_type == "container"
+        "tags": ["latest", "1.2.0", "1.2"],
+        "labels": {
+          "org.opencontainers.image.revision": "a1b2c3d4",
+          "org.opencontainers.image.source":   "https://github.com/dukono/my-app"
+        },
+        "manifest": {
+          "digest":     "sha256:037fb5afaa44c5cde96a4f4e6b118d3f9d202dec0b84f6eccbe82e3217d4f018",
+          "media_type": "application/vnd.oci.image.manifest.v1+json"
+        }
+      }
+    }
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -600,29 +974,67 @@ Se dispara cuando se publica o actualiza un paquete en **GitHub Packages**.
 ### `check_run`
 
 <details>
-<summary>Ver campos de github.event en check_run</summary>
+<summary>Ver JSON</summary>
 
-Se dispara cuando una **GitHub App** (CI externo) crea o actualiza un check run.
+Se dispara cuando una **GitHub App** de CI crea o actualiza un check run.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"completed"` | `created`, `rerequested`, `completed`, `requested_action` |
-| `github.event.check_run.name` | `"Unit Tests"` | Nombre del check |
-| `github.event.check_run.status` | `"completed"` | `"queued"`, `"in_progress"`, `"completed"` |
-| `github.event.check_run.conclusion` | `"success"` | `success`, `failure`, `neutral`, `cancelled`, `skipped`, `timed_out`, `action_required`, `null` (si no completó aún) |
-| `github.event.check_run.head_sha` | `"a1b2c3d4..."` | SHA del commit que se chequeó |
-| `github.event.check_run.external_id` | `"build-123"` | ID externo asignado por la app (`null` si no tiene) |
-| `github.event.check_run.started_at` | `"2026-04-22T10:00:00Z"` | Cuándo empezó |
-| `github.event.check_run.completed_at` | `"2026-04-22T10:05:00Z"` | Cuándo terminó (`null` si no completó) |
-| `github.event.check_run.output.title` | `"Tests passed"` | Título del resultado |
-| `github.event.check_run.output.summary` | `"42 tests passed"` | Resumen |
-| `github.event.check_run.output.annotations_count` | `0` | Número de anotaciones |
-| `github.event.check_run.app.name` | `"GitHub Actions"` | Nombre de la GitHub App que creó el check |
-| `github.event.check_run.app.slug` | `"github-actions"` | Slug de la app |
-| `github.event.check_run.check_suite.id` | `1234567890` | ID del check suite al que pertenece |
-| `github.event.check_run.pull_requests` | `[{number: 42}]` | PRs asociados a este check |
-| `github.event.check_run.html_url` | `"https://github.com/.../runs/9876543210"` | URL del check |
-| `github.event.requested_action.identifier` | `"fix-it"` | ⚠️ Solo cuando `action == "requested_action"` — identificador del botón pulsado |
+```jsonc
+{
+  // "created" | "rerequested" | "completed" | "requested_action"
+  "action": "completed",
+
+  "check_run": {
+    "id":          9876543210,
+    "name":        "Unit Tests",
+    "head_sha":    "a1b2c3d4e5f6...",
+    "external_id": "build-123",  // ID asignado por la app externa (null si no tiene)
+
+    // "queued" | "in_progress" | "completed"
+    "status": "completed",
+
+    // "success" | "failure" | "neutral" | "cancelled" | "skipped" | "timed_out" | "action_required"
+    // null mientras no ha completado
+    "conclusion": "success",
+
+    "started_at":   "2026-04-22T10:00:00Z",
+    "completed_at": "2026-04-22T10:05:00Z",  // null si no completó
+
+    "output": {
+      "title":             "Tests passed",
+      "summary":           "All 42 tests passed",
+      "text":              null,
+      "annotations_count": 0
+    },
+
+    "check_suite": {
+      "id":         1234567890,
+      "head_branch": "feature/oauth",
+      "head_sha":   "a1b2c3d4..."
+    },
+
+    "app": {
+      "id":   15368,
+      "name": "GitHub Actions",
+      "slug": "github-actions"
+    },
+
+    "pull_requests": [              // PRs asociados a este check
+      {
+        "number": 42,
+        "head":   { "ref": "feature/oauth", "sha": "a1b2c3d4..." },
+        "base":   { "ref": "main",          "sha": "83108f7a..." }
+      }
+    ],
+
+    "html_url": "https://github.com/dukono/my-app/runs/9876543210"
+  },
+
+  // ⚠️ Solo cuando action == "requested_action" (usuario pulsó un botón del check):
+  "requested_action": { "identifier": "fix-it" }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -631,24 +1043,43 @@ Se dispara cuando una **GitHub App** (CI externo) crea o actualiza un check run.
 ### `check_suite`
 
 <details>
-<summary>Ver campos de github.event en check_suite</summary>
+<summary>Ver JSON</summary>
 
 Un check suite agrupa varios check runs del mismo commit.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"completed"` | `"completed"`, `"requested"`, `"rerequested"` |
-| `github.event.check_suite.id` | `1234567890` | ID del suite |
-| `github.event.check_suite.head_branch` | `"feature/oauth"` | Rama del commit |
-| `github.event.check_suite.head_sha` | `"a1b2c3d4..."` | SHA del commit |
-| `github.event.check_suite.before` | `"83108f7a..."` | SHA anterior |
-| `github.event.check_suite.after` | `"a1b2c3d4..."` | SHA posterior |
-| `github.event.check_suite.status` | `"completed"` | `"queued"`, `"in_progress"`, `"completed"` |
-| `github.event.check_suite.conclusion` | `"success"` | `success`, `failure`, `neutral`, `cancelled`, ... `null` si no terminó |
-| `github.event.check_suite.app.name` | `"GitHub Actions"` | Nombre de la app |
-| `github.event.check_suite.pull_requests` | `[{number: 42}]` | PRs asociados |
-| `github.event.check_suite.created_at` | `"2026-04-22T10:00:00Z"` | Fecha de creación |
-| `github.event.check_suite.updated_at` | `"2026-04-22T10:05:00Z"` | Fecha de última actualización |
+```jsonc
+{
+  // "completed" | "requested" | "rerequested"
+  "action": "completed",
+
+  "check_suite": {
+    "id":          1234567890,
+    "head_branch": "feature/oauth",
+    "head_sha":    "a1b2c3d4e5f6...",
+    "before":      "83108f7a2e3b...",
+    "after":       "a1b2c3d4e5f6...",
+
+    // "queued" | "in_progress" | "completed"
+    "status": "completed",
+
+    // "success" | "failure" | "neutral" | "cancelled" | ... | null
+    "conclusion": "success",
+
+    "app": {
+      "id":   15368,
+      "name": "GitHub Actions",
+      "slug": "github-actions"
+    },
+
+    "pull_requests": [{ "number": 42 }],
+
+    "created_at": "2026-04-22T10:00:00Z",
+    "updated_at": "2026-04-22T10:05:00Z"
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -657,24 +1088,43 @@ Un check suite agrupa varios check runs del mismo commit.
 ### `deployment`
 
 <details>
-<summary>Ver campos de github.event en deployment</summary>
+<summary>Ver JSON</summary>
 
 Se dispara cuando se **crea un deployment** (via API o una action).
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.deployment.id` | `789012345` | ID del deployment |
-| `github.event.deployment.sha` | `"a1b2c3d4..."` | SHA del commit a desplegar |
-| `github.event.deployment.ref` | `"main"` | Rama o tag desde donde se despliega |
-| `github.event.deployment.task` | `"deploy"` | Tarea: por defecto siempre `"deploy"` |
-| `github.event.deployment.environment` | `"production"` | Nombre del entorno: `"production"`, `"staging"`, `"development"`, ... |
-| `github.event.deployment.description` | `"Deploy v1.2.0"` | Descripción del deployment (`null` si no tiene) |
-| `github.event.deployment.production_environment` | `true` | `true` si el environment está marcado como producción |
-| `github.event.deployment.transient_environment` | `false` | `true` si es un entorno efímero (pr previews, etc.) |
-| `github.event.deployment.payload` | `{"version":"1.2.0"}` | JSON personalizado enviado al crear el deployment |
-| `github.event.deployment.creator.login` | `"dukono"` | Usuario o bot que creó el deployment |
-| `github.event.deployment.statuses_url` | `"https://api.github.com/.../deployments/789012345/statuses"` | URL para consultar o actualizar el estado del deployment |
-| `github.event.deployment.created_at` | `"2026-04-22T10:00:00Z"` | Fecha de creación |
+```jsonc
+{
+  "deployment": {
+    "id":  789012345,
+    "sha": "a1b2c3d4e5f6...",       // SHA del commit a desplegar
+    "ref": "main",                  // rama o tag desde donde se despliega
+    "task": "deploy",               // siempre "deploy" por defecto
+
+    "environment": "production",    // "production" | "staging" | "development" | ...
+
+    "description": "Deploy v1.2.0 to production",  // null si no tiene
+
+    "production_environment": true, // true si el environment está marcado como producción
+    "transient_environment":  false, // true si es entorno efímero (PR previews, etc.)
+
+    "payload": {                    // JSON personalizado enviado al crear el deployment
+      "version": "1.2.0",
+      "target":  "us-east-1"
+    },
+
+    "creator": {
+      "login": "dukono",
+      "id":    12345678
+    },
+
+    "statuses_url": "https://api.github.com/repos/dukono/my-app/deployments/789012345/statuses",
+    "created_at":   "2026-04-22T10:00:00Z",
+    "updated_at":   "2026-04-22T10:00:00Z"
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -683,25 +1133,45 @@ Se dispara cuando se **crea un deployment** (via API o una action).
 ### `deployment_status`
 
 <details>
-<summary>Ver campos de github.event en deployment_status</summary>
+<summary>Ver JSON</summary>
 
 Se dispara cuando cambia el **estado** de un deployment.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.deployment_status.id` | `111222333` | ID del estado |
-| `github.event.deployment_status.state` | `"success"` | Estado: `pending`, `in_progress`, `queued`, `success`, `failure`, `error`, `inactive` |
-| `github.event.deployment_status.description` | `"Deploy succeeded"` | Descripción del estado (`null` si no tiene) |
-| `github.event.deployment_status.environment` | `"production"` | Nombre del entorno |
-| `github.event.deployment_status.environment_url` | `"https://my-app.example.com"` | URL del entorno desplegado (`null` si no tiene) |
-| `github.event.deployment_status.log_url` | `"https://github.com/.../runs/9876543210"` | URL de los logs (`null` si no tiene) |
-| `github.event.deployment_status.creator.login` | `"github-actions[bot]"` | Quien actualizó el estado |
-| `github.event.deployment_status.created_at` | `"2026-04-22T10:01:00Z"` | Fecha |
-| `github.event.deployment.id` | `789012345` | ID del deployment al que pertenece este estado |
-| `github.event.deployment.sha` | `"a1b2c3d4..."` | SHA del commit del deployment |
-| `github.event.deployment.ref` | `"main"` | Rama del deployment |
-| `github.event.deployment.environment` | `"production"` | Entorno del deployment |
-| `github.event.deployment.payload` | `{"version":"1.2.0"}` | Payload del deployment |
+```jsonc
+{
+  "deployment_status": {
+    "id": 111222333,
+
+    // "pending" | "in_progress" | "queued" | "success" | "failure" | "error" | "inactive"
+    "state": "success",
+
+    "description":      "Deploy succeeded",           // null si no tiene
+    "environment":      "production",
+    "environment_url":  "https://my-app.example.com", // null si no tiene
+    "log_url":          "https://github.com/dukono/my-app/actions/runs/9876543210", // null si no tiene
+
+    "creator": {
+      "login": "github-actions[bot]",
+      "id":    41898282,
+      "type":  "Bot"
+    },
+
+    "created_at": "2026-04-22T10:01:00Z",
+    "updated_at": "2026-04-22T10:06:00Z"
+  },
+
+  "deployment": {                  // deployment al que pertenece este estado
+    "id":          789012345,
+    "sha":         "a1b2c3d4...",
+    "ref":         "main",
+    "task":        "deploy",
+    "environment": "production",
+    "payload":     { "version": "1.2.0" }
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -710,36 +1180,80 @@ Se dispara cuando cambia el **estado** de un deployment.
 ### `workflow_run`
 
 <details>
-<summary>Ver campos de github.event en workflow_run</summary>
+<summary>Ver JSON</summary>
 
 Se dispara cuando otro workflow **completa, inicia o se solicita**.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"completed"` | `"completed"`, `"requested"`, `"in_progress"` |
-| `github.event.workflow_run.id` | `9876543210` | ID de la ejecución del workflow origen |
-| `github.event.workflow_run.name` | `"CI Pipeline"` | Nombre del workflow origen |
-| `github.event.workflow_run.display_title` | `"fix: bug en login"` | Título de la ejecución (normalmente el mensaje del commit) |
-| `github.event.workflow_run.status` | `"completed"` | `"completed"`, `"in_progress"`, `"queued"` |
-| `github.event.workflow_run.conclusion` | `"success"` | `success`, `failure`, `neutral`, `cancelled`, `skipped`, `timed_out`, `action_required`, `null` |
-| `github.event.workflow_run.head_sha` | `"a1b2c3d4..."` | SHA del commit que ejecutó el workflow origen |
-| `github.event.workflow_run.head_branch` | `"feature/oauth"` | Rama del workflow origen |
-| `github.event.workflow_run.workflow_id` | `12345678` | ID del workflow (no de la ejecución, del workflow en sí) |
-| `github.event.workflow_run.run_number` | `42` | Número de ejecución del workflow origen |
-| `github.event.workflow_run.run_attempt` | `1` | Número de reintento de la ejecución origen |
-| `github.event.workflow_run.event` | `"push"` | Evento que **disparó el workflow origen** — no el evento actual |
-| `github.event.workflow_run.actor.login` | `"dukono"` | Usuario que disparó el workflow origen |
-| `github.event.workflow_run.triggering_actor.login` | `"dukono"` | Usuario que disparó esta ejecución concreta (puede diferir en re-runs) |
-| `github.event.workflow_run.pull_requests` | `[]` | PRs asociados al workflow origen (puede estar vacío) |
-| `github.event.workflow_run.repository.full_name` | `"dukono/my-app"` | Repo del workflow origen |
-| `github.event.workflow_run.artifacts_url` | `"https://api.github.com/.../runs/9876543210/artifacts"` | URL de la API para listar artifacts de esa ejecución |
-| `github.event.workflow_run.jobs_url` | `"https://api.github.com/.../runs/9876543210/jobs"` | URL de la API para listar jobs |
-| `github.event.workflow_run.logs_url` | `"https://api.github.com/.../runs/9876543210/logs"` | URL de los logs |
-| `github.event.workflow_run.html_url` | `"https://github.com/.../actions/runs/9876543210"` | URL web de la ejecución |
-| `github.event.workflow_run.created_at` | `"2026-04-22T10:00:00Z"` | Cuándo se creó |
-| `github.event.workflow_run.run_started_at` | `"2026-04-22T10:00:05Z"` | Cuándo empezó a ejecutarse |
-| `github.event.workflow.name` | `"CI Pipeline"` | Nombre del workflow (igual que `workflow_run.name`) |
-| `github.event.workflow.path` | `".github/workflows/ci.yml"` | Ruta al archivo del workflow |
+```jsonc
+{
+  // "completed" | "requested" | "in_progress"
+  "action": "completed",
+
+  "workflow_run": {
+    "id":            9876543210,
+    "name":          "CI Pipeline",
+    "display_title": "fix: bug en login",  // título visible (normalmente el mensaje del commit)
+
+    // "completed" | "in_progress" | "queued"
+    "status": "completed",
+
+    // "success" | "failure" | "neutral" | "cancelled" | "skipped" | "timed_out" | "action_required"
+    // null si no ha completado
+    "conclusion": "success",
+
+    "head_sha":    "a1b2c3d4e5f6...",
+    "head_branch": "feature/oauth",
+
+    "head_commit": {
+      "id":      "a1b2c3d4e5f6...",
+      "message": "fix: bug en login",
+      "author":  { "name": "Vitaly", "email": "vitaly@example.com" }
+    },
+
+    "workflow_id":  12345678,   // ID del workflow (no de la ejecución)
+    "run_number":   42,
+    "run_attempt":  1,
+
+    // ⚠️ ESTE es el evento que disparó el WORKFLOW ORIGEN, no el evento actual
+    "event": "push",             // "push" | "pull_request" | "schedule" | ...
+
+    "actor": {
+      "login": "dukono",
+      "id":    12345678
+    },
+    "triggering_actor": {
+      "login": "dukono",
+      "id":    12345678
+    },
+
+    "pull_requests": [],         // PRs asociados (puede estar vacío aunque haya PR)
+
+    "repository": {
+      "id":        987654321,
+      "full_name": "dukono/my-app"
+    },
+
+    // URLs para acceder a datos de la ejecución origen via API
+    "artifacts_url":   "https://api.github.com/repos/dukono/my-app/actions/runs/9876543210/artifacts",
+    "jobs_url":        "https://api.github.com/repos/dukono/my-app/actions/runs/9876543210/jobs",
+    "logs_url":        "https://api.github.com/repos/dukono/my-app/actions/runs/9876543210/logs",
+    "check_suite_url": "https://api.github.com/repos/dukono/my-app/check-suites/1234567890",
+    "html_url":        "https://github.com/dukono/my-app/actions/runs/9876543210",
+
+    "created_at":     "2026-04-22T10:00:00Z",
+    "updated_at":     "2026-04-22T10:05:00Z",
+    "run_started_at": "2026-04-22T10:00:05Z"
+  },
+
+  "workflow": {
+    "id":   12345678,
+    "name": "CI Pipeline",
+    "path": ".github/workflows/ci.yml"
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -748,25 +1262,35 @@ Se dispara cuando otro workflow **completa, inicia o se solicita**.
 ### `workflow_dispatch`
 
 <details>
-<summary>Ver campos de github.event en workflow_dispatch</summary>
+<summary>Ver JSON</summary>
 
 Se dispara cuando alguien ejecuta el workflow **manualmente** desde la UI o la API.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.inputs` | `{"environment":"production","version":"1.2.0"}` | Objeto con todos los inputs enviados |
-| `github.event.inputs.<nombre>` | `"production"` | Valor de un input concreto — **siempre llega como string** |
-| `github.event.ref` | `"refs/heads/main"` | Rama desde la que se ejecutó el workflow |
-| `github.event.workflow` | `".github/workflows/deploy.yml"` | Ruta del archivo del workflow |
-| `github.event.sender.login` | `"dukono"` | Usuario que ejecutó el workflow |
+```jsonc
+{
+  "inputs": {           // todos los valores llegan como STRINGS aunque el tipo declarado sea boolean/number
+    "environment": "production",
+    "version":     "1.2.0",
+    "dry_run":     "false",   // boolean → string "true" o "false"
+    "replicas":    "3"        // number  → string "3"
+  },
 
-> Todos los inputs son **strings** aunque el tipo declarado sea `boolean` o `number`:
+  "ref":      "refs/heads/main",         // rama desde la que se ejecutó
+  "workflow": ".github/workflows/deploy.yml",
+
+  "sender": { "login": "dukono", "id": 12345678 }
+
+  // + repository
+}
+```
+
+> Cómo usar cada tipo de input:
 >
-> | Tipo declarado | Cómo llega | Cómo usar |
+> | Tipo declarado | Valor real | Cómo comparar/usar |
 > |---|---|---|
 > | `string` | `"production"` | `inputs.env == 'production'` |
-> | `boolean` | `"true"` o `"false"` | `inputs.dry_run == 'true'` |
-> | `number` | `"3"` | `fromJSON(inputs.replicas)` para operar como número |
+> | `boolean` | `"true"` / `"false"` | `inputs.dry_run == 'true'` — es string, no booleano |
+> | `number` | `"3"` | `fromJSON(inputs.replicas)` para operar |
 > | `choice` | `"production"` | `inputs.env == 'production'` |
 > | `environment` | `"prod-env"` | `inputs.target == 'prod-env'` |
 
@@ -777,17 +1301,28 @@ Se dispara cuando alguien ejecuta el workflow **manualmente** desde la UI o la A
 ### `repository_dispatch`
 
 <details>
-<summary>Ver campos de github.event en repository_dispatch</summary>
+<summary>Ver JSON</summary>
 
 Se dispara con una **llamada a la API REST** desde un sistema externo.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"deploy"` | El `event_type` enviado en la llamada a la API |
-| `github.event.client_payload` | `{"environment":"prod","version":"1.2.3"}` | JSON personalizado enviado en la llamada — puede tener cualquier estructura |
-| `github.event.client_payload.<campo>` | `"prod"` | Acceso directo a cualquier campo del payload |
-| `github.event.sender.login` | `"dukono"` | Usuario que hizo la llamada API |
-| `github.event.installation.id` | `12345` | ID de la GitHub App (si fue disparado por una app) |
+```jsonc
+{
+  "action": "deploy",     // el "event_type" enviado en la llamada API
+
+  "client_payload": {     // JSON personalizado — puede tener cualquier estructura
+    "environment": "prod",
+    "version":     "1.2.3",
+    "force":       true,
+    "replicas":    3
+  },
+
+  "installation": { "id": 12345 },  // solo si fue disparado por una GitHub App
+
+  "sender": { "login": "dukono", "id": 12345678 }
+
+  // + repository
+}
+```
 
 Llamada API para dispararlo:
 ```bash
@@ -805,15 +1340,15 @@ curl -X POST \
 ### `schedule`
 
 <details>
-<summary>Ver campos de github.event en schedule</summary>
+<summary>Ver JSON</summary>
 
-Se dispara automáticamente según una **expresión cron**.
+```jsonc
+{
+  "schedule": "0 9 * * 1-5"   // la expresión cron que disparó esta ejecución
+}
+```
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.schedule` | `"0 9 * * 1-5"` | La expresión cron definida en el workflow que disparó esta ejecución |
-
-> El evento solo tiene este campo. El resto de la información del contexto viene de `github.*` (sha, repo, etc.) con los valores del último commit de la rama por defecto.
+> El evento solo tiene este campo. El resto del contexto (`github.sha`, `github.repository`, etc.) toma los valores del último commit de la rama por defecto.
 
 </details>
 
@@ -822,19 +1357,33 @@ Se dispara automáticamente según una **expresión cron**.
 ### `fork`
 
 <details>
-<summary>Ver campos de github.event en fork</summary>
+<summary>Ver JSON</summary>
 
 Se dispara cuando alguien hace un **fork** del repositorio.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.forkee.full_name` | `"otheruser/my-app"` | Nombre completo del fork creado |
-| `github.event.forkee.html_url` | `"https://github.com/otheruser/my-app"` | URL del fork |
-| `github.event.forkee.private` | `false` | Si el fork es privado |
-| `github.event.forkee.owner.login` | `"otheruser"` | Propietario del fork |
-| `github.event.forkee.owner.id` | `99999999` | ID del propietario del fork |
-| `github.event.forkee.created_at` | `"2026-04-22T11:00:00Z"` | Cuándo se creó el fork |
-| `github.event.sender.login` | `"otheruser"` | Usuario que hizo el fork |
+```jsonc
+{
+  "forkee": {                           // el fork recién creado
+    "id":             9999999,
+    "name":           "my-app",
+    "full_name":      "otheruser/my-app",
+    "private":        false,
+    "fork":           true,
+    "html_url":       "https://github.com/otheruser/my-app",
+    "clone_url":      "https://github.com/otheruser/my-app.git",
+    "default_branch": "main",
+    "owner": {
+      "login": "otheruser",
+      "id":    99999999,
+      "type":  "User"
+    },
+    "created_at": "2026-04-22T11:00:00Z",
+    "pushed_at":  "2026-04-22T11:00:00Z"
+  }
+
+  // + repository (el repo original), sender
+}
+```
 
 </details>
 
@@ -843,17 +1392,20 @@ Se dispara cuando alguien hace un **fork** del repositorio.
 ### `watch`
 
 <details>
-<summary>Ver campos de github.event en watch</summary>
+<summary>Ver JSON</summary>
 
 Se dispara cuando alguien da ⭐ **star** al repositorio.
-El nombre del evento (`watch`) es confuso — no tiene nada que ver con "seguir el repo".
+El nombre del evento (`watch`) es confuso — **no** tiene que ver con "seguir el repo".
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"started"` | Siempre `"started"` — es el único valor posible |
-| `github.event.repository.stargazers_count` | `128` | Total de estrellas tras esta acción |
-| `github.event.sender.login` | `"stargazer1"` | Usuario que dio la estrella |
-| `github.event.sender.id` | `44444444` | ID del usuario |
+```jsonc
+{
+  "action": "started"   // único valor posible
+
+  // + repository (que incluye stargazers_count actualizado), sender
+}
+```
+
+> Para saber cuántas estrellas hay: `github.event.repository.stargazers_count`
 
 </details>
 
@@ -862,24 +1414,42 @@ El nombre del evento (`watch`) es confuso — no tiene nada que ver con "seguir 
 ### `milestone`
 
 <details>
-<summary>Ver campos de github.event en milestone</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.action` | `"created"` | `created`, `closed`, `opened`, `edited`, `deleted` |
-| `github.event.milestone.number` | `3` | Número del milestone |
-| `github.event.milestone.title` | `"v2.0.0"` | Título |
-| `github.event.milestone.description` | `"Major release"` | Descripción (`null` si vacío) |
-| `github.event.milestone.state` | `"open"` | `"open"` o `"closed"` |
-| `github.event.milestone.open_issues` | `12` | Issues abiertos dentro del milestone |
-| `github.event.milestone.closed_issues` | `38` | Issues cerrados dentro del milestone |
-| `github.event.milestone.due_on` | `"2026-06-01T00:00:00Z"` | Fecha límite (`null` si no tiene) |
-| `github.event.milestone.creator.login` | `"dukono"` | Usuario que creó el milestone |
-| `github.event.milestone.html_url` | `"https://github.com/.../milestone/3"` | URL |
-| `github.event.milestone.created_at` | `"2026-01-01T00:00:00Z"` | Fecha de creación |
-| `github.event.milestone.updated_at` | `"2026-04-22T10:00:00Z"` | Última actualización |
-| `github.event.milestone.closed_at` | `null` | Fecha de cierre (`null` si está abierto) |
-| `github.event.sender.login` | `"dukono"` | Usuario que realizó la acción |
+```jsonc
+{
+  // "created" | "closed" | "opened" | "edited" | "deleted"
+  "action": "created",
+
+  "milestone": {
+    "id":          5678901,
+    "number":      3,
+    "title":       "v2.0.0",
+    "description": "Major release with new features",  // null si vacío
+    "state":       "open",     // "open" o "closed"
+
+    "open_issues":   12,
+    "closed_issues": 38,
+
+    "due_on": "2026-06-01T00:00:00Z",  // null si no tiene fecha límite
+
+    "creator": {
+      "login": "dukono",
+      "id":    12345678,
+      "type":  "User"
+    },
+
+    "html_url": "https://github.com/dukono/my-app/milestone/3",
+    "url":      "https://api.github.com/repos/dukono/my-app/milestones/3",
+
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-04-22T10:00:00Z",
+    "closed_at":  null
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -888,22 +1458,38 @@ El nombre del evento (`watch`) es confuso — no tiene nada que ver con "seguir 
 ### `page_build`
 
 <details>
-<summary>Ver campos de github.event en page_build</summary>
+<summary>Ver JSON</summary>
 
 Se dispara cuando se construye o falla **GitHub Pages**.
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `github.event.id` | `123456789` | ID de la construcción |
-| `github.event.build.status` | `"built"` | `"building"`, `"built"`, `"errored"` |
-| `github.event.build.commit` | `"a1b2c3d4..."` | SHA del commit que disparó el build |
-| `github.event.build.branch` | `"gh-pages"` | Rama de GitHub Pages |
-| `github.event.build.duration` | `90000` | Duración en **milisegundos** |
-| `github.event.build.error.message` | `null` | Mensaje de error (`null` si no falló) |
-| `github.event.build.pusher.login` | `"dukono"` | Usuario que hizo el push |
-| `github.event.build.created_at` | `"2026-04-22T10:00:00Z"` | Inicio |
-| `github.event.build.updated_at` | `"2026-04-22T10:01:30Z"` | Fin |
-| `github.event.build.url` | `"https://api.github.com/.../pages/builds/123456789"` | URL de la API de este build |
+```jsonc
+{
+  "id": 123456789,
+
+  "build": {
+    "url":    "https://api.github.com/repos/dukono/my-app/pages/builds/123456789",
+
+    // "building" | "built" | "errored"
+    "status": "built",
+
+    "error": { "message": null },  // null si no hubo error. Si falló: { "message": "..." }
+
+    "pusher": {
+      "login": "dukono",
+      "email": "dukono@example.com"
+    },
+
+    "commit":   "a1b2c3d4e5f6...",
+    "branch":   "gh-pages",
+    "duration": 90000,              // milisegundos
+
+    "created_at": "2026-04-22T10:00:00Z",
+    "updated_at": "2026-04-22T10:01:30Z"
+  }
+
+  // + repository, sender
+}
+```
 
 </details>
 
@@ -912,17 +1498,22 @@ Se dispara cuando se construye o falla **GitHub Pages**.
 ## `env`
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
-Variables de entorno definidas a nivel de **workflow**, **job** o **step**.
+```jsonc
+{
+  // definidas en el YAML a nivel de workflow, job o step
+  // todas son strings
+  "NODE_ENV":   "production",
+  "APP_VERSION": "1.2.3",
+  "DEBUG":      "false",
+  "API_URL":    "https://api.example.com"
+}
+```
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `env.<NOMBRE>` | `"production"` | Valor de la variable. Todos son **strings** |
-
-> - En bash: `$NOMBRE` directamente
-> - En expresiones: `${{ env.NOMBRE }}`
-> - El scope más cercano tiene prioridad: step > job > workflow
+> - En bash: `$NODE_ENV`
+> - En expresiones: `${{ env.NODE_ENV }}`
+> - El scope más cercano tiene prioridad: **step > job > workflow**
 
 </details>
 
@@ -931,25 +1522,47 @@ Variables de entorno definidas a nivel de **workflow**, **job** o **step**.
 ## `job`
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `job.status` | `"success"` | Estado actual del job: `"success"`, `"failure"`, `"cancelled"` |
-| `job.container.id` | `"abc123def456..."` | ID del container del job. Solo existe si el job tiene `container:` |
-| `job.container.network` | `"github_network_abc123"` | Red del container. Solo si el job tiene `container:` |
-| `job.services.<id>.id` | `"def456abc123..."` | ID del container del servicio. Solo si el job tiene `services:` |
-| `job.services.<id>.network` | `"github_network_abc123"` | Red del servicio |
-| `job.services.<id>.ports['<puerto_interno>']` | `"54321"` | **Puerto en el host** asignado al puerto interno del servicio |
+```jsonc
+{
+  // "success" | "failure" | "cancelled"
+  "status": "success",
 
-> **`job.services.<id>.ports`**: cuando declaras `ports: ["5432/tcp"]`, GitHub asigna un puerto aleatorio en el host y este campo te dice cuál es. Si declaras `ports: ["5432:5432"]` (fijado), siempre es `"5432"`.
+  // solo existe si el job tiene "container:"
+  "container": {
+    "id":      "abc123def456abc123def456abc123def456abc1",
+    "network": "github_network_abc123def456"
+  },
+
+  // solo existe si el job tiene "services:"
+  "services": {
+    "postgres": {
+      "id":      "def456abc123def456abc123def456abc123def4",
+      "network": "github_network_abc123def456",
+      "ports": {
+        "5432": "54321"   // clave = puerto INTERNO, valor = puerto en el HOST
+      }
+    },
+    "redis": {
+      "id":      "fff111aaa222fff111aaa222fff111aaa222fff1",
+      "network": "github_network_abc123def456",
+      "ports": {
+        "6379": "32768"
+      }
+    }
+  }
+}
+```
+
+> **`ports`**: si declaras `ports: ["5432/tcp"]` (dinámico), GitHub asigna un puerto aleatorio en el host — `ports["5432"]` te dice cuál es. Si declaras `ports: ["5432:5432"]` (fijado), siempre vale `"5432"`.
 
 > **`job.status` vs `needs.<job>.result`**:
 >
 > | | `job.status` | `needs.<job>.result` |
 > |---|---|---|
-> | Dónde se usa | Dentro del **mismo** job | En un job que depende de otro |
-> | Cuándo tiene valor | Mientras el job corre | Cuando el job ya terminó |
+> | Dónde | Dentro del mismo job | En un job que depende de otro |
+> | Cuándo | Mientras corre (refleja lo que pasó hasta ahora) | Cuando el job ya terminó completamente |
 
 </details>
 
@@ -958,26 +1571,45 @@ Variables de entorno definidas a nivel de **workflow**, **job** o **step**.
 ## `steps`
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `steps.<id>.outputs.<clave>` | `"1.2.3"` | Valor guardado por el step con `echo "clave=valor" >> $GITHUB_OUTPUT` |
-| `steps.<id>.outcome` | `"failure"` | Resultado **real** del step — lo que pasó de verdad |
-| `steps.<id>.conclusion` | `"success"` | Resultado **visible al workflow** — puede diferir si el step tiene `continue-on-error: true` |
+```jsonc
+{
+  "checkout": {         // id: del step en el YAML
+    "outputs": {},      // vacío si el step no usó $GITHUB_OUTPUT
+    "outcome":    "success",
+    "conclusion": "success"
+  },
 
-> **`outcome` vs `conclusion`** — la diferencia solo importa con `continue-on-error: true`:
+  "build": {
+    "outputs": {
+      "version":  "1.2.3",        // echo "version=1.2.3" >> $GITHUB_OUTPUT
+      "artifact": "my-app.zip"
+    },
+    "outcome":    "success",
+    "conclusion": "success"
+  },
+
+  "linter": {
+    "outputs": {},
+    "outcome":    "failure",  // ← falló de verdad
+    "conclusion": "success"   // ← pero tenía continue-on-error: true → error absorbido
+  }
+}
+```
+
+> **`outcome` vs `conclusion`** — solo difieren con `continue-on-error: true`:
 >
 > | Escenario | `outcome` | `conclusion` |
 > |---|---|---|
 > | Step OK | `"success"` | `"success"` |
-> | Step falla sin `continue-on-error` | `"failure"` | `"failure"` |
-> | Step falla **con** `continue-on-error: true` | `"failure"` | `"success"` ← error absorbido |
-> | Step omitido por `if:` | `"skipped"` | `"skipped"` |
+> | Step falla, sin `continue-on-error` | `"failure"` | `"failure"` |
+> | Step falla, **con** `continue-on-error: true` | `"failure"` | `"success"` ← absorbido |
+> | Step omitido por `if:` falso | `"skipped"` | `"skipped"` |
 >
-> → Para detectar si un step con `continue-on-error` falló realmente, usa **`outcome`**:
-> `if: steps.linter.outcome == 'failure'` ✅
-> `if: steps.linter.conclusion == 'failure'` ❌ siempre false
+> Para detectar un fallo real en un step con `continue-on-error`:
+> `steps.linter.outcome == 'failure'` ✅
+> `steps.linter.conclusion == 'failure'` ❌ siempre false
 
 </details>
 
@@ -986,39 +1618,82 @@ Variables de entorno definidas a nivel de **workflow**, **job** o **step**.
 ## `runner`
 
 <details>
-<summary>Ver campos (GitHub-hosted y self-hosted)</summary>
+<summary>Ver JSON — github-hosted Linux</summary>
 
-| Campo | Linux hosted | Windows hosted | self-hosted |
-|---|---|---|---|
-| `runner.name` | `"GitHub Actions 2"` | `"GitHub Actions 3"` | `"my-runner"` |
-| `runner.os` | `"Linux"` | `"Windows"` | `"Linux"` |
-| `runner.arch` | `"X64"` | `"X64"` | `"ARM64"` |
-| `runner.temp` | `"/home/runner/work/_temp"` | `"D:\a\_temp"` | `"/opt/runner/_work/_temp"` |
-| `runner.tool_cache` | `"/opt/hostedtoolcache"` | `"C:\hostedtoolcache\windows"` | `"/opt/runner/_work/_tool"` |
-| `runner.workspace` | `"/home/runner/work/my-app"` | `"D:\a\my-app"` | `"/opt/runner/_work/my-app"` |
-| `runner.environment` | `"github-hosted"` | `"github-hosted"` | `"self-hosted"` |
-| `runner.debug` | `""` (inactivo) / `"1"` (activo) | `""` / `"1"` | `""` / `"1"` |
+```jsonc
+{
+  "name":         "GitHub Actions 2",
+  "os":           "Linux",
+  "arch":         "X64",
+  "temp":         "/home/runner/work/_temp",
+  "tool_cache":   "/opt/hostedtoolcache",
+  "workspace":    "/home/runner/work/my-app",
+  "environment":  "github-hosted",
+  "debug":        ""    // "" = inactivo, "1" = activo
+}
+```
+
+</details>
+
+<details>
+<summary>Ver JSON — github-hosted Windows</summary>
+
+```jsonc
+{
+  "name":         "GitHub Actions 3",
+  "os":           "Windows",
+  "arch":         "X64",
+  "temp":         "D:\\a\\_temp",
+  "tool_cache":   "C:\\hostedtoolcache\\windows",
+  "workspace":    "D:\\a\\my-app",
+  "environment":  "github-hosted",
+  "debug":        ""
+}
+```
+
+</details>
+
+<details>
+<summary>Ver JSON — self-hosted</summary>
+
+```jsonc
+{
+  "name":         "my-self-hosted-runner",
+  "os":           "Linux",
+  "arch":         "ARM64",
+  "temp":         "/opt/actions-runner/_work/_temp",
+  "tool_cache":   "/opt/actions-runner/_work/_tool",
+  "workspace":    "/opt/actions-runner/_work/my-app",
+  "environment":  "self-hosted",
+  "debug":        ""
+}
+```
+
+</details>
 
 > `runner.debug` es un **string** — comparar con `== '1'`, nunca con `== true`.
 > Se activa con el secret `ACTIONS_RUNNER_DEBUG=true` o pulsando "Enable debug logging" al re-ejecutar.
-
-</details>
 
 ---
 
 ## `secrets`
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `secrets.GITHUB_TOKEN` | `"ghs_xxxxxxxxxxxx"` | Token automático siempre disponible — no hay que crearlo |
-| `secrets.<NOMBRE>` | `"mi-valor-secreto"` | Cualquier secret configurado en el repo, organización o ambiente |
+```jsonc
+{
+  "GITHUB_TOKEN":          "ghs_xxxxxxxxxxxxxxxxxxxx",   // automático, siempre disponible
+  "DOCKER_PASSWORD":       "mi-contraseña-docker",
+  "AWS_ACCESS_KEY_ID":     "AKIAIOSFODNN7EXAMPLE",
+  "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/...",
+  "DB_CONNECTION_STRING":  "postgres://user:pass@host:5432/mydb"
+}
+```
 
-> - En los logs, GitHub **enmascara** todos los secrets con `***`
-> - Si el secret no existe, devuelve `""` — no lanza error
-> - Los secrets de organización solo están disponibles si el repo tiene permiso para usarlos
+> - En los logs, GitHub enmascara todos los valores con `***`
+> - Si el secret no existe devuelve `""` — no lanza error
+> - Los secrets de organización solo están disponibles si el repo tiene permiso
 
 </details>
 
@@ -1027,16 +1702,21 @@ Variables de entorno definidas a nivel de **workflow**, **job** o **step**.
 ## `vars`
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `vars.<NOMBRE>` | `"production"` | Cualquier variable de configuración definida en el repo, organización o ambiente |
+```jsonc
+{
+  "ENVIRONMENT":        "production",
+  "API_URL":            "https://api.example.com",
+  "MAX_REPLICAS":       "5",
+  "FEATURE_FLAG_OAUTH": "true",
+  "DEPLOY_REGION":      "eu-west-1"
+}
+```
 
 > - Todos los valores son **strings**
-> - A diferencia de `secrets`, son **visibles en logs**
-> - Para datos sensibles (contraseñas, tokens) usar `secrets`, no `vars`
-> - Si la variable no existe, devuelve `""` — no lanza error
+> - Visibles en logs (no encriptados) — para datos sensibles usar `secrets`
+> - Si no existe devuelve `""` — no lanza error
 
 </details>
 
@@ -1045,17 +1725,24 @@ Variables de entorno definidas a nivel de **workflow**, **job** o **step**.
 ## `strategy` y `matrix`
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
-Solo disponibles en jobs que usan `strategy.matrix`.
-
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `strategy.fail-fast` | `true` | Si `true`, cancela todos los jobs de la matriz cuando uno falla |
-| `strategy.job-index` | `4` | Índice (empezando en 0) de esta combinación dentro de la matriz |
-| `strategy.job-total` | `9` | Total de combinaciones en la matriz |
-| `strategy.max-parallel` | `4` | Máximo de jobs corriendo simultáneamente |
-| `matrix.<propiedad>` | `"ubuntu-latest"` | Valor de esa propiedad en la combinación actual |
+```jsonc
+// Ejemplo con matrix: os x python (3x3 = 9 combinaciones), corriendo el job-index 4
+{
+  "strategy": {
+    "fail-fast":    true,   // si true, cancela todos cuando uno falla
+    "job-index":    4,      // índice 0-based de esta combinación (0..8)
+    "job-total":    9,      // total de combinaciones
+    "max-parallel": 4       // máximo de jobs simultáneos
+  },
+  "matrix": {
+    "os":           "ubuntu-latest",   // valor de esta celda
+    "python":       "3.11",
+    "experimental": false              // campo añadido con "include:"
+  }
+}
+```
 
 > Si la matriz es `os: [ubuntu, windows, macos]` × `python: [3.9, 3.10, 3.11]` → `job-total = 9`, `job-index` va de `0` a `8`.
 
@@ -1066,16 +1753,27 @@ Solo disponibles en jobs que usan `strategy.matrix`.
 ## `needs`
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
-Acceso a los **resultados y outputs** de los jobs de los que depende el job actual.
-
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `needs.<job_id>.result` | `"success"` | Resultado final del job: `"success"`, `"failure"`, `"cancelled"`, `"skipped"` |
-| `needs.<job_id>.outputs.<clave>` | `"1.2.3"` | Valor publicado por el job en su sección `outputs:` |
-
-> Solo contiene los jobs declarados en `needs:` del job actual — no los jobs de los que dependían esos jobs.
+```jsonc
+// Solo contiene los jobs declarados en needs: del job actual
+{
+  "build": {
+    "result": "success",      // "success" | "failure" | "cancelled" | "skipped"
+    "outputs": {
+      "version":   "1.2.3",   // lo que el job escribió en $GITHUB_OUTPUT
+      "artifact":  "my-app-1.2.3.zip",
+      "image-tag": "ghcr.io/dukono/my-app:1.2.3"
+    }
+  },
+  "test": {
+    "result": "success",
+    "outputs": {
+      "coverage": "87"
+    }
+  }
+}
+```
 
 </details>
 
@@ -1084,60 +1782,83 @@ Acceso a los **resultados y outputs** de los jobs de los que depende el job actu
 ## `inputs`
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
-Disponible en `workflow_dispatch` (ejecución manual) y `workflow_call` (workflow reutilizable).
+```jsonc
+// Disponible en workflow_dispatch y workflow_call
+// Todos los valores son STRINGS independientemente del tipo declarado
+{
+  "environment": "production",   // type: choice   → string
+  "version":     "1.2.0",        // type: string   → string
+  "dry_run":     "false",        // type: boolean  → string "true" o "false"
+  "replicas":    "3",            // type: number   → string "3"
+  "target_env":  "prod-env"      // type: environment → string
+}
+```
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `inputs.<nombre>` | `"production"` | Valor del input — **siempre llega como string** |
-
-> Tipos de input y cómo llegan:
+> Cómo usar cada tipo:
 >
-> | Tipo declarado | Valor en `inputs.<nombre>` | Cómo comparar o usar |
-> |---|---|---|
-> | `string` | `"production"` | `inputs.env == 'production'` |
-> | `boolean` | `"true"` / `"false"` | `inputs.dry_run == 'true'` — es string, no booleano |
-> | `number` | `"3"` | `fromJSON(inputs.replicas)` para operar como número |
-> | `choice` | `"production"` | `inputs.env == 'production'` |
-> | `environment` | `"prod-env"` | `inputs.target == 'prod-env'` |
+> | Tipo declarado | Comparar/usar |
+> |---|---|
+> | `string` / `choice` / `environment` | `inputs.env == 'production'` |
+> | `boolean` | `inputs.dry_run == 'true'` — es string, no booleano |
+> | `number` | `fromJSON(inputs.replicas)` para operar como número |
 
 > `inputs.<nombre>` y `github.event.inputs.<nombre>` son equivalentes en `workflow_dispatch`.
-> En `workflow_call`, **solo existe `inputs`** — `github.event.inputs` no existe.
+> En `workflow_call`, **solo existe `inputs`**.
 
 </details>
 
 ---
 
-## `jobs` — solo workflows reutilizables
+## `jobs` — solo reusable workflows
 
 <details>
-<summary>Ver campos</summary>
+<summary>Ver JSON</summary>
 
 Solo disponible en workflows con `on: workflow_call`. **No existe en workflows normales.**
 
-| Campo | Ejemplo | Descripción |
-|---|---|---|
-| `jobs.<job_id>.result` | `"success"` | Resultado del job: `"success"`, `"failure"`, `"cancelled"`, `"skipped"` |
-| `jobs.<job_id>.outputs.<clave>` | `"https://my-app.example.com"` | Output del job |
+```jsonc
+{
+  "build": {
+    "result": "success",     // "success" | "failure" | "cancelled" | "skipped"
+    "outputs": {
+      "artifact": "my-app-1.2.3.zip",
+      "image":    "ghcr.io/dukono/my-app:1.2.3"
+    }
+  },
+  "test": {
+    "result": "success",
+    "outputs": {
+      "coverage": "87",
+      "passed":   "true"
+    }
+  },
+  "deploy": {
+    "result": "success",
+    "outputs": {
+      "url":       "https://my-app.example.com",
+      "deploy-id": "dep-abc123"
+    }
+  }
+}
+```
 
 > **`jobs` vs `needs`**:
 >
 > | | `needs` | `jobs` |
 > |---|---|---|
-> | Disponible en | Cualquier workflow, dentro de un job | Solo en reusable workflows (`workflow_call`) |
-> | Accede a | Solo los jobs en `needs:` del job actual | **Todos** los jobs del workflow |
-> | Válido en `outputs:` del workflow | ❌ No | ✅ Sí |
+> | Disponible en | Cualquier workflow, dentro de un job | Solo reusable workflows |
+> | Accede a | Solo jobs en el `needs:` del job actual | **Todos** los jobs del workflow |
+> | Válido en sección `outputs:` del workflow | ❌ | ✅ |
 >
-> Ejemplo de uso en la sección `outputs:` del workflow reutilizable (fuera de cualquier job):
 > ```yaml
 > on:
 >   workflow_call:
 >     outputs:
 >       url:
->         value: ${{ jobs.deploy.outputs.url }}   # ← 'jobs', no 'needs'
+>         value: ${{ jobs.deploy.outputs.url }}  # ← jobs, no needs
 > ```
-> Si intentas usar `needs` en ese nivel, da error — `needs` no existe fuera de un job.
 
 </details>
 
@@ -1148,44 +1869,52 @@ Solo disponible en workflows con `on: workflow_call`. **No existe en workflows n
 <details>
 <summary>Ver explicación y uso</summary>
 
-Varios campos del contexto son **arrays de objetos**. Los más comunes:
+Varios campos del contexto son **arrays de objetos**:
 
-| Campo | Estructura de cada elemento |
-|---|---|
-| `github.event.pull_request.labels` | `{ id, name, color, description, default }` |
-| `github.event.pull_request.assignees` | `{ login, id, type, site_admin }` |
-| `github.event.pull_request.requested_reviewers` | `{ login, id, type }` |
-| `github.event.pull_request.requested_teams` | `{ id, name, slug }` |
-| `github.event.issue.labels` | `{ id, name, color, description, default }` |
-| `github.event.issue.assignees` | `{ login, id }` |
-| `github.event.commits` | `{ id, message, timestamp, author, committer, added, modified, removed }` |
-| `github.event.release.assets` | `{ id, name, size, download_count, browser_download_url }` |
+```jsonc
+// github.event.pull_request.labels
+[
+  { "id": 123456, "name": "bug",    "color": "d73a4a", "description": "...", "default": true  },
+  { "id": 789012, "name": "urgent", "color": "e11d48", "description": "...", "default": false }
+]
 
-**Acceso por índice — un elemento concreto:**
+// github.event.pull_request.assignees
+[
+  { "login": "user1", "id": 11111111, "type": "User", "site_admin": false },
+  { "login": "user2", "id": 22222222, "type": "User", "site_admin": false }
+]
+
+// github.event.pull_request.requested_reviewers
+[{ "login": "reviewer1", "id": 33333333, "type": "User" }]
+
+// github.event.pull_request.requested_teams
+[{ "id": 999, "name": "backend-team", "slug": "backend-team" }]
+
+// github.event.commits (en push)
+[{ "id": "a1b2...", "message": "fix: login", "added": [], "modified": ["src/login.ts"], "removed": [] }]
+
+// github.event.release.assets
+[{ "id": 9876543, "name": "my-app-linux-amd64", "size": 15728640, "download_count": 42, "browser_download_url": "..." }]
 ```
-github.event.pull_request.labels[0].name    → "bug"
-github.event.commits[0].message             → "fix: bug en login"
+
+**Operador `.*`** — extrae el mismo campo de **todos** los elementos:
+```
+labels.*.name         → ["bug", "urgent"]
+assignees.*.login     → ["user1", "user2"]
+commits.*.message     → ["fix: login", "test: add tests"]
 ```
 
-**Operador `.*` — un campo de todos los elementos a la vez:**
+**Acceso por índice** — un elemento concreto:
 ```
-github.event.pull_request.labels.*.name     → ["bug", "urgent", "preview"]
-github.event.pull_request.assignees.*.login → ["user1", "user2"]
-github.event.commits.*.message              → ["fix: login", "test: añadir tests"]
+labels[0].name        → "bug"
+commits[0].id         → "a1b2c3..."
 ```
 
-Equivale a `.map(x => x.campo)` en JavaScript. **Solo funciona dentro de expresiones `${{ }}`**.
-
-**Uso típico con `contains()`:**
+**Con `contains()`**:
 ```yaml
-# ¿Tiene la etiqueta "bug"?
-if: contains(github.event.pull_request.labels.*.name, 'bug')
-
-# ¿Está asignado a dukono?
-if: contains(github.event.pull_request.assignees.*.login, 'dukono')
-
-# ¿Se ha solicitado revisión a reviewer1?
-if: contains(github.event.pull_request.requested_reviewers.*.login, 'reviewer1')
+contains(github.event.pull_request.labels.*.name, 'bug')
+contains(github.event.pull_request.assignees.*.login, 'dukono')
+contains(github.event.pull_request.requested_reviewers.*.login, 'reviewer1')
 ```
 
 </details>
@@ -1197,23 +1926,48 @@ if: contains(github.event.pull_request.requested_reviewers.*.login, 'reviewer1')
 <details>
 <summary>Ver todas las funciones disponibles en expresiones ${{ }}</summary>
 
-| Función | Qué hace | Ejemplo |
-|---|---|---|
-| `contains(buscar_en, valor)` | `true` si `buscar_en` contiene `valor` — funciona con strings y arrays | `contains('hello world', 'world')` → `true` |
-| `startsWith(texto, prefijo)` | `true` si `texto` empieza con `prefijo` | `startsWith(github.ref, 'refs/heads/')` → `true` |
-| `endsWith(texto, sufijo)` | `true` si `texto` termina con `sufijo` | `endsWith(github.ref_name, '-dev')` → `true` |
-| `format(plantilla, arg0, arg1, ...)` | Sustituye `{0}`, `{1}`, etc. en la plantilla | `format('v{0}.{1}', '1', '2')` → `"v1.2"` |
-| `join(array, separador)` | Une los elementos del array con el separador | `join(github.event.pull_request.labels.*.name, ', ')` → `"bug, urgent"` |
-| `toJSON(valor)` | Convierte a string JSON — útil para debuggear o pasar datos | `toJSON(github.event)` → `'{"action":"push",...}'` |
-| `fromJSON(string)` | Parsea un string JSON a objeto o valor | `fromJSON('{"a":1}').a` → `1` |
-| `hashFiles(patrón)` | SHA-256 de los archivos que coinciden con el patrón | `hashFiles('**/package-lock.json')` → `"abc123..."` |
-| `success()` | `true` si todos los steps anteriores han pasado | Se usa en `if:` de steps |
-| `failure()` | `true` si algún step anterior falló | Se usa en `if:` de steps de limpieza |
-| `cancelled()` | `true` si el workflow fue cancelado | Se usa en `if:` de steps |
-| `always()` | Siempre `true` — ejecuta el step pase lo que pase | Se usa en `if:` de steps de notificación/limpieza |
+```jsonc
+// contains(buscar_en, valor) — true si buscar_en contiene valor (string o array)
+contains('hello world', 'world')                              // → true
+contains(github.event.pull_request.labels.*.name, 'bug')     // → true/false
 
-> `success()` es el comportamiento **por defecto** si no hay `if:`. Es decir, no poner `if:` equivale a `if: success()`.
+// startsWith(texto, prefijo)
+startsWith('refs/heads/main', 'refs/heads/')                  // → true
+startsWith(github.event.pull_request.title, 'feat:')          // → true/false
 
-> `always()` no tiene equivalente con `job.status` — es la única forma de garantizar que un step corra incluso si el workflow fue cancelado.
+// endsWith(texto, sufijo)
+endsWith('my-branch-dev', '-dev')                             // → true
+endsWith(github.ref_name, '-dev')                             // → true/false
+
+// format(plantilla, arg0, arg1, ...)  — sustituye {0}, {1}, ...
+format('v{0}.{1}', '1', '2')                                  // → "v1.2"
+format('Deploy {0} to {1}', inputs.version, inputs.env)       // → "Deploy 1.2.0 to production"
+
+// join(array, separador) — une elementos con el separador
+join(github.event.pull_request.labels.*.name, ', ')           // → "bug, urgent"
+join(github.event.pull_request.assignees.*.login, ' ')        // → "user1 user2"
+join(github.event.commits.*.message, '\n')                    // → "fix: login\nfeat: tests"
+
+// toJSON(valor) — serializa a string JSON
+toJSON(github.event.pull_request.labels)                      // → "[{\"id\":123,...}]"
+toJSON(github.event)                                           // → payload completo como string
+
+// fromJSON(string) — parsea un string JSON a objeto o valor
+fromJSON('{"a":1}').a                                          // → 1
+fromJSON(inputs.replicas)                                      // → 3 (número, no string)
+
+// hashFiles(patrón) — SHA-256 de los archivos que coinciden
+hashFiles('**/package-lock.json')                              // → "abc123..."
+hashFiles('**/pom.xml', '**/build.gradle')                     // → hash combinado
+
+// Funciones de estado — se usan en if: de steps
+success()    // true si todos los steps anteriores pasaron (comportamiento por defecto)
+failure()    // true si algún step anterior falló
+cancelled()  // true si el workflow fue cancelado
+always()     // siempre true — garantiza ejecución pase lo que pase
+```
+
+> `success()` es el comportamiento por defecto si no hay `if:`.
+> `always()` es la única forma de garantizar ejecución incluso tras cancelación.
 
 </details>
